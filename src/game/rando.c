@@ -659,6 +659,13 @@ static s32 appendWanted(const RandoItem *it, s32 i, s32 lvl, s32 *carried)
     {
         return it->place == lvl && !(it->kind == KIND_RECORD && it->home == lvl);
     }
+    if (it->rectype == PROPDEF_COLLECTABLE)
+    {
+        /* a found weapon (the Golden Gun) is already carried in by the weapon
+         * inventory; force-picking up a copy freed its prop under the handover
+         * and crashed on entering the next level (10-31) */
+        return FALSE;
+    }
     if ((it->kind == KIND_RECORD && it->home != lvl)
         || it->kind == KIND_NEWKEY                                    /* no vanilla record: always a copy */
         || (it->kind == KIND_CRADLEKEY && lvl != SP_LEVEL_BUNKER1))   /* Bunker 1 checks for a GoldenEye Key */
