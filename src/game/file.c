@@ -2,6 +2,7 @@
 #include "file.h"
 #include "file2.h"
 #include "front.h"
+#include "rando.h"
 #ifdef PORT
 #include <stdlib.h>
 #endif
@@ -49,6 +50,15 @@ void end_of_mission_briefing(void)
                      (int)g_AppendCheatSinglePlayer, (int)selected_folder_num,
                      ((-1 < briefingpage) && selected_difficulty != DIFFICULTY_007 &&
                       g_AppendCheatSinglePlayer == FALSE) ? "" : "  <-- GUARD FAILS, no unlock");
+#endif
+#ifdef GE_RANDOMIZER
+    /* Randomizer progress is kept in its own save. Beating the last level
+     * Cradle was waiting on plays the "new cheat unlocked" fanfare. */
+    if (-1 < briefingpage && randoStageCompleted(mission_folder_setup_entries[briefingpage].mission_num))
+    {
+        g_NewCheatUnlocked = TRUE;
+        return;
+    }
 #endif
     if ((-1 < briefingpage) && selected_difficulty != DIFFICULTY_007 && g_AppendCheatSinglePlayer == FALSE)
     {

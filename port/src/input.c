@@ -73,6 +73,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include <SDL.h>
 
@@ -90,6 +91,7 @@
 #include "language.h"  /* j_text_trigger (control-type mirror) */
 #include "gun.h"  /* native weapon flags + dedicated reload entry points */
 #include "bondinv.h" /* inventory list for the Xbox-style gadget cycle */
+#include "rando.h"
 
 /* D194 spazz diagnosis: game ticks batched into the current poll (lv.h).
  * Read-only; declared locally to avoid pulling lv.h's wider dependency set. */
@@ -1101,6 +1103,8 @@ static int    s_menuPointerLive = 0;
 
 /* ------------------------------------------------------------------------ */
 
+static int padIsN64(SDL_GameController *pad);
+
 static void padDetectRumble(int i)
 {
     padRumbleOn[i] = 0;
@@ -1119,6 +1123,11 @@ static void padDetectRumble(int i)
         padRumbleOn[i] = ctype && (ctype != SDL_CONTROLLER_TYPE_VIRTUAL);
     }
 #endif
+    /* An N64 controller on a USB adapter has its own accessory slot, empty
+     * here: a rumble-capable pad would make the game see a Rumble Pak in it
+     * (osPfsIsPlug / CONT_CARD_ON), and rumble commands sent to a cheap
+     * adapter can upset it. */
+    if (padIsN64(pads[i])) padRumbleOn[i] = 0;
 }
 
 static int padSeatOf(SDL_JoystickID inst)
@@ -1534,6 +1543,100 @@ static int bindsVersion = 0; /* D380/D386: versioned migration of effective ini 
 static int crouchMode = 1;   /* 0 = hold, 1 = toggle (latched crouch input); D556: toggle by default (existing ini values kept) */
 
 static void padMapSelfTest(void);
+/* N64 controllers on USB adapters. The Xbox-pad mapping in
+ * inputComputePadSlot would re-route their buttons, so they pass straight
+ * through instead: the game's own control style (1.2 SOLITARE by default, see
+ * stickSolitare) reads them exactly as on the console.
+ *
+ * The GH-SP-5027 adapter (VID 0e6d PID 111d) comes up either as a generic HID
+ * pad, which SDL has no mapping for, or in Xbox mode, where it reports
+ * Microsoft's 045e:028e and can't be told apart from a real Xbox 360 pad
+ * (hence Input.N64Pad). In Xbox mode its layout is A, B, Z = LT, Start =
+ * left-stick click, L/R = LB/RB, C-up/down/left/right = Start/X/Y/Back, D-pad,
+ * left stick. The HID-mode mapping below reproduces that layout so both modes
+ * read the same (n64PadButtons). */
+static const char *const kN64PadMappings[] = {
+    "030000696d0e00001d11000000000000,N64 USB Controller,a:b2,b:b1,lefttrigger:b6,leftstick:b12,"
+    "leftshoulder:b4,rightshoulder:b5,start:b9,x:b3,y:b0,back:b8,"
+    "dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,platform:Windows,",
+};
+
+static int n64PadAll = 0;   /* Input.N64Pad: 1 = every gamepad is an N64 controller on such an adapter */
+
+static int padIsN64(SDL_GameController *pad)
+{
+    const char *name = SDL_GameControllerName(pad);
+    return n64PadAll || (name && strstr(name, "N64") != NULL);
+}
+
+/* SDL axis -> N64 stick units: small deadzone, full deflection = STICK_MAX. */
+/* N64 stick feel. USB adapters like the GH-SP-5027 amplify the stick and clip
+ * it to a square: full scale arrives well before the gate, and diagonals read
+ * full on both axes, which no N64 controller can do (measured 10-30 with
+ * local/stickcal: every one of the 8 directions hit +-32767). So the adapter
+ * value is turned back into N64 stick units the console would report:
+ *   N64StickRange     units at full adapter deflection (console tilt is ~80)
+ *   N64StickDeadzone  units of centre slop that read as 0
+ *   N64StickCurve     response exponent x100 (100 = linear, >100 = calmer near centre)
+ *   N64StickOctagon   clip to the N64 octagon gate: diagonals reach ~75% per axis */
+static int n64StickRange = 80;
+static int n64StickDeadzone = 10;
+static int n64StickCurve = 130;
+static int n64StickOctagon = 1;
+
+static void n64Stick(int vx, int vy, int *outx, int *outy)
+{
+    double r = n64StickRange, dz = n64StickDeadzone;
+    double x = vx / 32767.0, y = vy / 32767.0;
+    double mag = sqrt(x * x + y * y);
+    if (mag > 1.0) { x /= mag; y /= mag; mag = 1.0; }
+
+    /* radial deadzone + response curve on the magnitude */
+    double live = dz / r;
+    if (mag <= live) { *outx = *outy = 0; return; }
+    double m = (mag - live) / (1.0 - live);
+    m = pow(m, n64StickCurve / 100.0);
+    x = x / mag * m * r;
+    y = y / mag * m * r;
+
+    if (n64StickOctagon) {
+        /* octant edge from (R, 0) to (d, d): scale back anything outside it */
+        double d = 0.75 * r, a = fabs(x), b = fabs(y);
+        if (b > a) { double t = a; a = b; b = t; }
+        double reach = d * a + (r - d) * b;
+        if (reach > d * r) { double k = d * r / reach; x *= k; y *= k; }
+    }
+
+    *outx = (int)lround(x);
+    *outy = (int)lround(y);
+    if (*outx > STICK_MAX) *outx = STICK_MAX; if (*outx < -STICK_MAX) *outx = -STICK_MAX;
+    if (*outy > STICK_MAX) *outy = STICK_MAX; if (*outy < -STICK_MAX) *outy = -STICK_MAX;
+}
+
+static unsigned n64PadButtons(SDL_GameController *pad)
+{
+    static const struct { int btn; unsigned bit; } map[] = {
+        { SDL_CONTROLLER_BUTTON_A, GE_CONT_A },
+        { SDL_CONTROLLER_BUTTON_B, GE_CONT_B },
+        { SDL_CONTROLLER_BUTTON_LEFTSTICK, GE_CONT_START },
+        { SDL_CONTROLLER_BUTTON_LEFTSHOULDER, GE_CONT_L },
+        { SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, GE_CONT_R },
+        { SDL_CONTROLLER_BUTTON_START, GE_CONT_E },
+        { SDL_CONTROLLER_BUTTON_X, GE_CONT_D },
+        { SDL_CONTROLLER_BUTTON_Y, GE_CONT_C },
+        { SDL_CONTROLLER_BUTTON_BACK, GE_CONT_F },
+        { SDL_CONTROLLER_BUTTON_DPAD_UP, GE_CONT_UP },
+        { SDL_CONTROLLER_BUTTON_DPAD_DOWN, GE_CONT_DOWN },
+        { SDL_CONTROLLER_BUTTON_DPAD_LEFT, GE_CONT_LEFT },
+        { SDL_CONTROLLER_BUTTON_DPAD_RIGHT, GE_CONT_RIGHT },
+    };
+    unsigned b = 0;
+    for (size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++)
+        if (SDL_GameControllerGetButton(pad, (SDL_GameControllerButton)map[i].btn)) b |= map[i].bit;
+    if (SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16384) b |= GE_CONT_G;
+    return b;
+}
+
 int inputInit(void)
 {
     if (!SDL_WasInit(SDL_INIT_GAMECONTROLLER)) {
@@ -1542,6 +1645,9 @@ int inputInit(void)
                          SDL_GetError());
         }
     }
+    for (size_t i = 0; i < sizeof(kN64PadMappings) / sizeof(kN64PadMappings[0]); i++)
+        if (SDL_GameControllerAddMapping(kN64PadMappings[i]) < 0)
+            sysLogPrintf(LOG_WARNING, "input: N64 pad mapping rejected: %s", SDL_GetError());
 
     /* D401: make BT PS4/PS5 pads report haptics (PD input.c:696-697). Must
      * be set before the pads below are opened. */
@@ -1641,6 +1747,19 @@ void inputUpdate(void)
 {
     if (SDL_AtomicSet(&s_rescanReq, 0)) inputRescanPads();   /* D450 */
     SDL_GameControllerUpdate();
+#ifdef GE_RANDOMIZER
+    {   /* L or R on player 1's pad: randomizer item list, next page / close
+         * (menus only; a no-op in a level) */
+        extern void optionsRandoListToggle(void);
+        static int prevL = 0, prevR = 0;
+        SDL_GameController *p0 = slotPad(0);
+        int l = p0 && SDL_GameControllerGetButton(p0, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+        int r = p0 && SDL_GameControllerGetButton(p0, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+        if ((l && !prevL) || (r && !prevR)) optionsRandoListToggle();
+        prevL = l;
+        prevR = r;
+    }
+#endif
     if (s_seatCompactOwed && !inputMpSplit()) {
         inputOpenPads();   /* DNEW-mp-1: match over -> compact the seats */
     }
@@ -2097,6 +2216,29 @@ static void inputCycleGadget(void)
 
 /* Fill button mask + stick for controller idx. Returns the 16-bit mask. */
 static unsigned inputComputePadSlot(int idx, signed char *stick_x, signed char *stick_y);
+/* Note player 1's pad dropping off USB and coming back in the randomizer's
+ * progress log. (The GH-SP-5027 N64 adapter re-enumerates when C-up + C-right,
+ * its Start + Select, are held ~0.5 s: its mode-switch hotkey.) */
+static int s_seat0Present = -1;   /* -1 = not known yet */
+
+static void padWatchSeat0(void)
+{
+    int now = slotPad(0) != NULL;
+
+    if (s_seat0Present == 1 && !now) {
+        sysLogPrintf(LOG_WARNING, "input: player 1 controller disconnected");
+#ifdef GE_RANDOMIZER
+        randoLogEvent("    CONTROLLER DISCONNECTED\n");
+#endif
+    } else if (s_seat0Present == 0 && now) {
+        sysLogPrintf(LOG_NOTE, "input: player 1 controller reconnected (%s)", SDL_GameControllerName(slotPad(0)));
+#ifdef GE_RANDOMIZER
+        randoLogEvent("    controller reconnected\n");
+#endif
+    }
+    s_seat0Present = now;
+}
+
 unsigned inputComputePad(int idx, signed char *stick_x, signed char *stick_y)
 {
     unsigned r;
@@ -2748,7 +2890,17 @@ static unsigned inputComputePadSlot(int idx, signed char *stick_x, signed char *
 
     /* ---- gamepad ---- */
     SDL_GameController *pad = slotPad(idx);
-    if (pad) {
+    if (pad && padIsN64(pad)) {
+        /* N64 pad: straight through, the game's control style applies (kN64PadMappings) */
+        int nx, ny;
+        n64Stick(SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX),
+                 SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY), &nx, &ny);
+        ny = -ny;   /* SDL up = negative */
+        if (nx) sx = nx;
+        if (ny) sy = ny;
+        if (idx == 0 && (nx || ny)) s_aimDevMouse = 0;
+        button |= n64PadButtons(pad);
+    } else if (pad) {
         int lx = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);
         int ly = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
         int rx = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_RIGHTX);
@@ -3240,6 +3392,7 @@ void inputRescanPads(void)
     inputOpenPads();
     sysLogPrintf(LOG_NOTE, "input: rescanned pads (mask=0x%x, %d controller(s))",
                  connectedMask, numControllers);
+    padWatchSeat0();
 }
 
 /* ------------------------------------------------------------------------
@@ -3941,6 +4094,11 @@ PD_CONSTRUCTOR static void inputConfigInit(void)
     configRegisterInt("Input.MouseAimCurve", &aimCurveGamma, 50, 400);  /* D194(a), x100 */
     configRegisterInt("Input.NaturalPitch", &naturalPitchMode, 0, 1);  /* D194/D238 */
     configRegisterInt("Input.ControlScheme", &controlScheme, 0, 1);    /* D513: 0 Modern, 1 OG controls */
+    configRegisterInt("Input.N64Pad", &n64PadAll, 0, 1);               /* every pad is an N64 adapter (kN64PadMappings) */
+    configRegisterInt("Input.N64StickRange", &n64StickRange, 40, 80);    /* N64 feel, see n64Stick */
+    configRegisterInt("Input.N64StickDeadzone", &n64StickDeadzone, 0, 30);
+    configRegisterInt("Input.N64StickCurve", &n64StickCurve, 50, 300);
+    configRegisterInt("Input.N64StickOctagon", &n64StickOctagon, 0, 1);
     configRegisterInt("Input.PadDeadzone", &padDeadzone, 0, 30000);  /* legacy; Wave A migrates to L/R */
     configRegisterInt("Input.PadDeadzoneL", &padDeadzoneL, 0, 30000);  /* Wave A: left (movement) stick */
     configRegisterInt("Input.PadDeadzoneR", &padDeadzoneR, 0, 30000);  /* Wave A: right (look) stick */

@@ -3354,6 +3354,75 @@ static const struct HintLine kHint[] = {
 enum { H_PADCAP1, H_PADCAP2, H_KEYCAP1, H_KEYCAP2, H_HUB1, H_HUB2, H_CTRL1, H_BACK, H_BIND1, H_BIND2, H_SEC1 };
 static void tipSelfCheck(void);
 
+#ifdef GE_RANDOMIZER
+/* Randomizer item list: I (keyboard) or L / R (pad) on the menus shows every
+ * item found so far on a dark see-through card, names only (no levels). Each
+ * press shows the next page; the press after the last page closes it. */
+extern int randoMenuItemNames(const char **names, int max);
+static int s_randoList = 0;    /* page shown, 1-based; 0 = closed */
+static int s_randoPages = 1;   /* pages at the last draw */
+
+void optionsRandoListToggle(void)
+{
+    const char *probe[1];
+    if (s_randoList == 0) {
+        s_randoList = randoMenuItemNames(probe, 0) >= 0 ? 1 : 0;
+    } else {
+        s_randoList = s_randoList < s_randoPages ? s_randoList + 1 : 0;
+    }
+}
+
+static int randoListWanted(void)
+{
+    const char *probe[1];
+    if (s_randoList && randoMenuItemNames(probe, 0) < 0) {
+        s_randoList = 0;   /* a level started: the list belongs to the menus */
+    }
+    return s_randoList;
+}
+
+static Gfx *randoListEmit(Gfx *gdl, s32 W, s32 H)
+{
+    enum { MAXN = 128 };
+    const char *names[MAXN];
+    int n = randoMenuItemNames(names, MAXN), cols, rows, per, page, first, i;
+    const s32 lineH = 11, margin = 18, top = margin + 18;
+    s32 colW, x0 = margin, y0 = margin, x1 = W - margin, y1 = H - margin;
+    char title[48];
+
+    if (n < 0) return gdl;
+    rows = (y1 - top - 6) / lineH;
+    if (rows < 1) rows = 1;
+    cols = n > rows ? 2 : 1;
+    per = rows * cols;
+    s_randoPages = n > 0 ? (n + per - 1) / per : 1;
+    if (s_randoList > s_randoPages) s_randoList = s_randoPages;   /* list shrank */
+    page = s_randoList;
+    first = (page - 1) * per;
+    colW = (x1 - x0 - 16) / cols;
+
+    gdl = fillRect(gdl, x0, y0, x1, y1, 0, 0, 0, 200);                  /* dark, slightly see-through */
+    gdl = fillRect(gdl, x0, y0 + 15, x1, y0 + 16, 0x40, 0xff, 0x60, 160); /* line under the title */
+    gdl = microcode_constructor(gdl);
+    snprintf(title, sizeof(title), n == 1 ? "ITEMS FOUND: 1" : "ITEMS FOUND: %d", n);
+    gdl = drawBody(gdl, x0 + 8, y0 + 4, title, 0xffe066ff);
+    if (n == 0) {
+        gdl = drawBody(gdl, x0 + 8, top, "Nothing yet.", 0xd0d0d0ff);
+    }
+    for (i = 0; first + i < n && i < per; i++) {
+        gdl = drawBody(gdl, x0 + 8 + (i / rows) * colW, top + (i % rows) * lineH, names[first + i], 0xf0f0f0ff);
+    }
+    if (s_randoPages > 1) {
+        snprintf(title, sizeof(title), page < s_randoPages ? "PAGE %d/%d (press again)" : "PAGE %d/%d",
+                 page, s_randoPages);
+        gdl = drawBodyR(gdl, x1 - 8, y0 + 4, title, 0x909090ff);
+    } else {
+        gdl = drawBodyR(gdl, x1 - 8, y0 + 4, "I / L / R: close", 0x909090ff);
+    }
+    return gdl;
+}
+#endif
+
 Gfx *optionsOverlayEmit(void)
 {
     SDL_AtomicLock(&s_ovLock);   /* D481: see optionsOverlayHandleInput */
@@ -3387,7 +3456,13 @@ static Gfx *overlayEmitLocked(void)
     }
 
     if (!s_open) {
-        if (!s_showFps || !s_fpsText[0]) {
+        int fps = s_showFps && s_fpsText[0];
+#ifdef GE_RANDOMIZER
+        int list = randoListWanted();
+#else
+        int list = 0;
+#endif
+        if (!fps && !list) {
             return NULL;   /* nothing appended -> golden dumps byte-identical */
         }
         /* D213: FPS-only mini DL (top-right), panel closed. */
@@ -3399,8 +3474,15 @@ static Gfx *overlayEmitLocked(void)
         gDPSetCycleType(fgdl++, G_CYC_1CYCLE);
         gDPSetTexturePersp(fgdl++, G_TP_NONE);
         gDPSetScissor(fgdl++, G_SC_NON_INTERLACE, 0, 0, viGetX(), viGetY());
+#ifdef GE_RANDOMIZER
+        if (list) {
+            fgdl = randoListEmit(fgdl, fw, fh);
+        }
+#endif
         fgdl = microcode_constructor(fgdl);
-        fgdl = drawTextR(fgdl, fw - 6, 6, s_fpsText, 0x40ff60ff);
+        if (fps) {
+            fgdl = drawTextR(fgdl, fw - 6, 6, s_fpsText, 0x40ff60ff);
+        }
         gDPPipeSync(fgdl++);
         gSPEndDisplayList(fgdl++);
         return s_buf;

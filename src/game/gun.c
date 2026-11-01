@@ -132,6 +132,7 @@ CartridgeModelFileRecord ejected_cartridge[] = {
 	{0, ""}
 };
 
+#include "rando.h"
 #include <assets/obseg/gun/gunWeaponStats.inc.c>
 
 //D:80033924
@@ -1090,7 +1091,22 @@ void advance_through_inventory(void)
     }
     else
     {
+#ifdef GE_RANDOMIZER
+        {
+            /* randomizer runs drain guns dry over time: skip weapons with no ammo
+             * left (they stay in the watch inventory and come back with ammo) */
+            ITEM_IDS fromright = nextright, fromleft = nextleft;
+            s32 tries = 0;
+
+            do
+            {
+                bondinvCycleForward(&nextright, &nextleft, FALSE);
+            } while (randoSkipEmptyWeapon(nextright, nextleft) && ++tries < 64
+                     && !(nextright == fromright && nextleft == fromleft));
+        }
+#else
         bondinvCycleForward(&nextright, &nextleft, FALSE);
+#endif
     }
 
     gunRequestHandWeaponChange(GUNRIGHT, nextright, 1);
@@ -1113,7 +1129,22 @@ void backstep_through_inventory(void)
     }
     else
     {
+#ifdef GE_RANDOMIZER
+        {
+            /* randomizer runs drain guns dry over time: skip weapons with no ammo
+             * left (they stay in the watch inventory and come back with ammo) */
+            ITEM_IDS fromright = nextright, fromleft = nextleft;
+            s32 tries = 0;
+
+            do
+            {
+                bondinvCycleBackward(&nextright, &nextleft, FALSE);
+            } while (randoSkipEmptyWeapon(nextright, nextleft) && ++tries < 64
+                     && !(nextright == fromright && nextleft == fromleft));
+        }
+#else
         bondinvCycleBackward(&nextright, &nextleft, FALSE);
+#endif
     }
 
     gunRequestHandWeaponChange(GUNRIGHT, nextright, -1);

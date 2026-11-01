@@ -567,9 +567,18 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
     }
 
     if (cc_features.opt_grayscale) {
+        /* GE's ROM never emits the grayscale extension; the randomizer uses it
+         * (src/game/rando.c randoGlowBegin). A colour makes items glow: the
+         * 0.6 floor keeps a dark model in a dark room bright instead of dark
+         * gold. White changes saturation instead (guards carrying an item):
+         * alpha 0.5 = unchanged, below = greyer, above = more colourful. */
         append_line(fs_buf, &fs_len, "    float intensity = (texel.r + texel.g + texel.b) / 3.0;");
-        append_line(fs_buf, &fs_len, "    vec3 new_texel = vGrayscaleColor.rgb * intensity;");
-        append_line(fs_buf, &fs_len, "    texel.rgb = mix(texel.rgb, new_texel, vGrayscaleColor.a);");
+        append_line(fs_buf, &fs_len, "    if (vGrayscaleColor.r > 0.99 && vGrayscaleColor.g > 0.99 && vGrayscaleColor.b > 0.99) {");
+        append_line(fs_buf, &fs_len, "        texel.rgb = clamp(mix(vec3(intensity), texel.rgb, 2.0 * vGrayscaleColor.a), 0.0, 1.0);");
+        append_line(fs_buf, &fs_len, "    } else {");
+        append_line(fs_buf, &fs_len, "        vec3 new_texel = vGrayscaleColor.rgb * (0.6 + intensity);");
+        append_line(fs_buf, &fs_len, "        texel.rgb = mix(texel.rgb, new_texel, vGrayscaleColor.a);");
+        append_line(fs_buf, &fs_len, "    }");
     }
 
     if (cc_features.opt_alpha) {
