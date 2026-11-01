@@ -45,6 +45,12 @@
 #include "model.h"
 #ifdef PORT
 #include <stdlib.h>
+#else
+/* libultra's memset is bzero(ptr, len) under another name, so memset(p, 0, n)
+ * cleared nothing on the N64 (a blank EEPROM's 0xFF read as every item found).
+ * Every memset here is a zero-fill. */
+void bzero(void *ptr, int len);
+#define memset(ptr, c, len) bzero((ptr), (len))
 #endif
 
 #ifdef GE_RANDOMIZER
@@ -231,6 +237,9 @@ static s32 s_ntracked;
 static char s_invNames[RANDO_MAX_ITEMS][RANDO_NAME_LEN];   /* watch names of added records */
 
 static s32 randoIoLoadSeed(u8 *buf, s32 max);
+#ifndef PORT
+static s32 randoSaveMissing(void);   /* N64: no 16K EEPROM, progress can't be kept */
+#endif
 static s32 randoIoLoadSave(RandoSave *save);
 static void randoIoWriteSave(const RandoSave *save);
 
@@ -783,6 +792,22 @@ void randoPatchSetup(s32 stageId)
     s_playStarted = FALSE;
 
     lvl = currentSoloLevel();
+    if (getPlayerCount() == 1 && (briefingpage < 0 || mission_folder_setup_entries[briefingpage].stage_id != stageId))
+    {
+        /* booted straight into the stage (N64 test ROMs: -level_NN): the
+         * developer boot looks the stage id up as a mission number, so the
+         * page is missing or another level's (Bunker 1, stage 9, got
+         * Statue's): find the stage's solo level by its id */
+        lvl = -1;
+        for (i = 0; mission_folder_setup_entries[i].folder_text_preset != 0; i++)
+        {
+            if (mission_folder_setup_entries[i].stage_id == stageId && mission_folder_setup_entries[i].type == MISSION_PART)
+            {
+                lvl = mission_folder_setup_entries[i].mission_num;
+                break;
+            }
+        }
+    }
     s_cradleOpenAtEntry = randoActive() && cradleUnlocked();
     if (!randoActive() || lvl < 0 || g_CurrentSetup.propDefs == NULL)
     {
@@ -824,7 +849,9 @@ void randoPatchSetup(s32 stageId)
     newbase = base;
     if (extra > 0)
     {
-        newbase = mempAllocBytesInBank(used + extra + endbytes, MEMPOOL_STAGE);
+        /* the bump allocator doesn't round: an odd size left every later
+         * allocation of the level misaligned for DMA (the N64 hung) */
+        newbase = mempAllocBytesInBank((used + extra + endbytes + 15) & ~15, MEMPOOL_STAGE);
         memcpy(newbase, base, used);
         memcpy(newbase + used + extra, base + used, endbytes);
         g_CurrentSetup.propDefs = (void *)newbase;
@@ -1097,6 +1124,7 @@ char *randoInvName(ObjectRecord *obj)
     return NULL;
 }
 
+#ifdef PORT   /* the PC options overlay's list (its buffer would cost the N64 10 KB) */
 int randoMenuItemNames(const char **names, int max)
 {
     /* Menu item list (port optionsoverlay.c): short names of every item found
@@ -1115,7 +1143,14 @@ int randoMenuItemNames(const char **names, int max)
             continue;
         }
         shortName(buf[n], s_seed.items[i].name);
-        buf[n][strcspn(buf[n], "\n")] = '\0';
+        for (j = 0; buf[n][j] != '\0'; j++)   /* first line only (no strcspn in the N64 libc) */
+        {
+            if (buf[n][j] == '\n')
+            {
+                buf[n][j] = '\0';
+                break;
+            }
+        }
         names[n] = buf[n];
         n++;
     }
@@ -1130,6 +1165,7 @@ int randoMenuItemNames(const char **names, int max)
     }
     return n;
 }
+#endif
 
 void randoLogEvent(const char *line)
 {
@@ -1347,6 +1383,12 @@ void randoTick(void)
         s_died = TRUE;
         RANDOLOG("    DIED on %s\n", s_levelNames[s_level]);
     }
+#ifndef PORT
+    if (s_tickCount == 120 && g_CameraMode == CAMERAMODE_FP && randoSaveMissing())
+    {
+        hudmsgBottomShow("No 16K EEPROM: progress won't save");
+    }
+#endif
     if (s_tickCount == 300 && g_CameraMode == CAMERAMODE_FP)
     {
         /* Five seconds into play: are the items we handed over really held? */
@@ -1376,6 +1418,17 @@ void randoTick(void)
             }
         }
         RANDOLOG("    check: %d of %d carried items in the inventory\n", held, carried);
+#ifndef PORT
+        {
+            extern MemoryPool g_mempPools[];
+            MemoryPool *st = &g_mempPools[MEMPOOL_STAGE];
+            MemoryPool *pm = &g_mempPools[MEMPOOL_PERMANENT];
+
+            RANDOLOG("    heap: level %d of %d KB, permanent %d of %d KB, memory %d MB\n",
+                     (s32)(st->pos - st->start) >> 10, (s32)(st->end - st->start) >> 10,
+                     (s32)(pm->pos - pm->start) >> 10, (s32)(pm->end - pm->start) >> 10, (s32)(osMemSize >> 20));
+        }
+#endif
     }
     if (g_CameraMode != CAMERAMODE_FP && s_tickCount < 300)
     {
@@ -1827,11 +1880,196 @@ static void randoIoWriteSave(const RandoSave *save)
     }
 }
 #else
-/* N64: seed blob in ROM + save in EEPROM -- not wired yet */
-static s32 randoIoLoadSeed(u8 *buf, s32 max) { return 0; }
-static s32 randoIoLoadSave(RandoSave *save) { return FALSE; }
-static void randoIoWriteSave(const RandoSave *save) { }
-static void randoLog(const char *fmt, ...) { }
+/* N64: the seed sits in the ROM at RANDO_SEED_ROM (randomizer/n64/patch_rom.py
+ * puts it there). Progress goes to EEPROM blocks 64 and up: the game's own
+ * saves fill a 4K chip, so the ROM header asks for a 16K one (flashcarts and
+ * emulators that read the homebrew header give it; others need it set). */
+#include <stdarg.h>
+#include <PR/rcp.h>
+#include "joy.h"
+#include "token.h"
+
+#define RANDO_SEED_ROM   0xFF0000   /* randomizer/n64rom.py SEED_ROM */
+#define RANDO_TOKEN_ROM  0xFFB000   /* n64rom.py TOKEN_ROM (where dev carts kept the token string) */
+#define RANDO_EEP_BLOCK  64
+#define RANDO_EEP_16K    2          /* osEepromProbe: EEPROM_TYPE_16K */
+
+static RandoSave s_eepShadow;       /* what the EEPROM holds: only changed blocks are written */
+static s32 s_eepOk = -1;
+static s32 s_logOn;                 /* test ROM token -rlog */
+
+static void romRead(u8 *dst, u32 rom, s32 len)
+{
+    /* Our own DMA request and queue, independent of the game's. The DMA lands
+     * in a whole-cache-line buffer of ours (the cache over it is invalidated)
+     * and is copied out. */
+    static u64 chunkw[256 / 8 + 2];
+    static OSIoMesg iomsg;
+    static OSMesgQueue queue;
+    static OSMesg msg;
+    u8 *chunk = (u8 *)(((u32)chunkw + 15) & ~15);
+    s32 off;
+
+    osCreateMesgQueue(&queue, &msg, 1);
+    for (off = 0; off < len; off += 256)
+    {
+        s32 n = len - off < 256 ? len - off : 256;
+
+        osInvalDCache(chunk, 256);
+        osPiStartDma(&iomsg, OS_MESG_PRI_NORMAL, OS_READ, rom + off, chunk, 256, &queue);
+        osRecvMesg(&queue, NULL, OS_MESG_BLOCK);
+        memcpy(dst + off, chunk, n);
+    }
+}
+
+static s32 randoIoLoadSeed(u8 *buf, s32 max)
+{
+    romRead(buf, RANDO_SEED_ROM, max);
+    return max;
+}
+
+void randoUseExpansionPak(void)
+{
+    /* The randomizer's data and each level's added items and their models
+     * need more than the stock 4 MB leaves (Dam ran out and the allocator
+     * spins forever). With an Expansion Pak the level heap moves to its 4 MB,
+     * which the game never uses, and the permanent heap grows into the level
+     * heap's old place. Without one nothing changes. */
+    extern MemoryPool g_mempPools[];
+
+    if (osMemSize < 0x800000)
+    {
+        return;
+    }
+    g_mempPools[MEMPOOL_PERMANENT].start = g_mempPools[MEMPOOL_STAGE].start;
+    g_mempPools[MEMPOOL_STAGE].start = (u8 *)0x80400000;
+    g_mempPools[MEMPOOL_STAGE].pos = (u8 *)0x80400000;
+    g_mempPools[MEMPOOL_STAGE].end = (u8 *)0x80800000;
+}
+
+void randoBootTokens(void)
+{
+    /* The retail game ignores the cartridge's developer token string and sets
+     * its default memory tokens: a test ROM's own tokens (-level_NN -hardN
+     * -rlog, at RANDO_TOKEN_ROM) are added after them. Empty on normal ROMs. */
+    static char rom[640];
+    static char str[64 + 640];
+    s32 i, n;
+
+    romRead((u8 *)rom, RANDO_TOKEN_ROM, sizeof(rom));
+    if (rom[0] == '\0')
+    {
+        return;
+    }
+    strcpy(str, "          -ml0 -me0 -mgfx100 -mvtx50 -mt700 -ma400 ");
+    n = strlen(str);
+    for (i = 0; i < (s32)sizeof(rom) - 1 && rom[i] != '\0'; i++)
+    {
+        str[n++] = rom[i];
+    }
+    str[n] = '\0';
+    tokenSetString(str);
+    /* noted now: every level load replaces the token string with its memory settings */
+    s_logOn = tokenFind(1, "-rlog") != NULL;
+}
+
+static s32 eepReady(void)
+{
+    if (s_eepOk < 0)
+    {
+        s_eepOk = joyGamePakProbe() == RANDO_EEP_16K;
+    }
+    return s_eepOk;
+}
+
+static s32 randoIoLoadSave(RandoSave *save)
+{
+    if (!eepReady())
+    {
+        return FALSE;
+    }
+    joyGamePakLongRead(RANDO_EEP_BLOCK, (u8 *)&s_eepShadow, sizeof(s_eepShadow));
+    *save = s_eepShadow;
+    return TRUE;
+}
+
+static void randoIoWriteSave(const RandoSave *save)
+{
+    s32 b;
+
+    if (!eepReady())
+    {
+        return;
+    }
+    /* a block write stalls ~15 ms: a pickup changes one or two of the 32 */
+    for (b = 0; b < (s32)(sizeof(*save) / 8); b++)
+    {
+        if (memcmp((const u8 *)save + b * 8, (u8 *)&s_eepShadow + b * 8, 8) != 0)
+        {
+            memcpy((u8 *)&s_eepShadow + b * 8, (const u8 *)save + b * 8, 8);
+            joyGamePakLongWrite(RANDO_EEP_BLOCK + b, (u8 *)&s_eepShadow + b * 8, 8);
+        }
+    }
+}
+
+static s32 randoSaveMissing(void)
+{
+    return s_seed.loaded && !eepReady();
+}
+
+/* Test ROMs only (token -rlog): the progress log goes to the IS-Viewer port,
+ * which emulators print. Never written on a normal ROM. */
+int _Printf(char *(*prout)(char *, const char *, u32), char *arg, const char *fmt, va_list args);
+
+static char *s_isvEnd;
+
+static char *isvOut(char *dst, const char *src, u32 n)
+{
+    while (n-- > 0 && dst < s_isvEnd)
+    {
+        *dst++ = *src++;
+    }
+    return dst;
+}
+
+static void randoLog(const char *fmt, ...)
+{
+    static char line[256];
+    va_list ap;
+    s32 n, i;
+
+    if (!s_logOn)
+    {
+        return;
+    }
+    s_isvEnd = line + sizeof(line) - 4;
+    va_start(ap, fmt);
+    n = _Printf(isvOut, line, fmt, ap);
+    va_end(ap);
+    if (n > (s32)sizeof(line) - 4)
+    {
+        n = sizeof(line) - 4;
+        line[n - 1] = '\n';   /* cut short: still a whole line */
+    }
+    for (i = 0; i < n; i += 4)
+    {
+        while (IO_READ(PI_STATUS_REG) & (PI_STATUS_DMA_BUSY | PI_STATUS_IO_BUSY))
+        {
+        }
+        IO_WRITE(0x13FF0020 + i, ((u32)(u8)line[i] << 24) | ((u32)(u8)line[i + 1] << 16)
+                                 | ((u32)(u8)line[i + 2] << 8) | (u8)line[i + 3]);
+    }
+    while (IO_READ(PI_STATUS_REG) & (PI_STATUS_DMA_BUSY | PI_STATUS_IO_BUSY))
+    {
+    }
+    /* Mupen64Plus 2.6 never rewinds its line buffer after printing (every later
+     * line came out empty): an oversized length trips its overflow reset first */
+    IO_WRITE(0x13FF0014, 0x10000);
+    while (IO_READ(PI_STATUS_REG) & (PI_STATUS_DMA_BUSY | PI_STATUS_IO_BUSY))
+    {
+    }
+    IO_WRITE(0x13FF0014, n);
+}
 #endif
 
 #endif /* GE_RANDOMIZER */

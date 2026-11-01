@@ -12,10 +12,10 @@ import subprocess
 import sys
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from . import generate as gen
-from . import levels, world as worlddata
+from . import levels, n64rom, world as worlddata
 
 APP_TITLE = "GoldenEye Randomizer"
 DIFF_LABELS = {"agent": "Agent", "secret": "Secret Agent", "00agent": "00 Agent"}
@@ -139,10 +139,11 @@ class Launcher(tk.Tk):
 
         cur = ttk.LabelFrame(self, text="Current seed")
         cur.grid(row=2, column=0, sticky="nsew", **pad)
-        ttk.Label(cur, textvariable=self.status, justify="left").grid(row=0, column=0, columnspan=3, sticky="w", padx=8, pady=4)
+        ttk.Label(cur, textvariable=self.status, justify="left").grid(row=0, column=0, columnspan=4, sticky="w", padx=8, pady=4)
         ttk.Button(cur, text="Copy race code", command=self.copy_code).grid(row=1, column=0, sticky="w", padx=8, pady=6)
         ttk.Button(cur, text="Spoiler log...", command=self.open_spoiler).grid(row=1, column=1, sticky="w", pady=6)
-        ttk.Button(cur, text="PLAY", command=self.play).grid(row=1, column=2, sticky="e", padx=8, pady=6)
+        ttk.Button(cur, text="N64 ROM...", command=self.make_n64_rom).grid(row=1, column=2, sticky="w", pady=6)
+        ttk.Button(cur, text="PLAY", command=self.play).grid(row=1, column=3, sticky="e", padx=8, pady=6)
 
         note = ("Each level opens when you find its clearance, or when you beat the level before it.\n"
                 "Good to know: the covert modem (Dam) and the tracking bug (Frigate) are the same item, so either\n"
@@ -233,6 +234,47 @@ class Launcher(tk.Tk):
                 os.startfile(path)
             else:
                 subprocess.Popen(["xdg-open", str(path)])
+
+    def make_n64_rom(self):
+        """The current seed as an N64 ROM (EverDrive / emulator): the base ROM
+        from randomizer/n64/build_base.sh plus this seed."""
+        code, _ = self.current()
+        if not code:
+            messagebox.showinfo(APP_TITLE, "Generate a seed or load a race code first.")
+            return
+        try:
+            seed, settings = gen.parse_race_code(code, self.world)
+        except ValueError:
+            messagebox.showerror(APP_TITLE, "The current seed was made by a different randomizer version.")
+            return
+        base = n64rom.find_base(self.root)
+        if base is None:
+            if not messagebox.askokcancel(
+                    APP_TITLE, "Pick the N64 base ROM (ge007-rando-base.z64).\n\nIt's built once from your own "
+                               "GoldenEye ROM with randomizer/n64/build_base.sh (Linux or WSL), see the README."):
+                return
+            picked = filedialog.askopenfilename(title="N64 base ROM", filetypes=[("N64 ROM", "*.z64")])
+            if not picked:
+                return
+            base = Path(picked)
+        out = filedialog.asksaveasfilename(title="Save the N64 ROM", defaultextension=".z64",
+                                           initialfile=f"goldeneye-rando-{code}.z64",
+                                           filetypes=[("N64 ROM", "*.z64")])
+        if not out:
+            return
+        self.config(cursor="watch")
+        self.update()
+        try:
+            res = gen.generate(seed, settings, self.world)
+            Path(out).write_bytes(n64rom.patch(base.read_bytes(), gen.to_seedfile(res).pack()))
+        except (gen.GenerationError, ValueError, OSError) as e:
+            messagebox.showerror(APP_TITLE, f"Could not make the N64 ROM: {e}")
+            return
+        finally:
+            self.config(cursor="")
+        messagebox.showinfo(APP_TITLE, f"Saved {out}\n\nExperimental, not yet tested on a real N64. It needs an "
+                                       "Expansion Pak, and the save type set to EEPROM 16K (EverDrive OS 3.x "
+                                       "picks that up from the ROM). Items don't glow on the N64.")
 
     def play(self):
         exe = find_exe(self.root)

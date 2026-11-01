@@ -211,3 +211,6 @@ randomizer/build/
 __pycache__/
 /stickcal.txt
 !/randomizer/data/
+
+# N64 base ROM built from your own ROM (randomizer/n64/build_base.sh): never committed
+randomizer/n64/build/

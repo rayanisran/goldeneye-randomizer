@@ -78,6 +78,15 @@ s32  randoExtraInvSlots(void);
 /* gun.c weapon cycling: TRUE = skip this weapon (it uses ammo and none is left). */
 s32  randoSkipEmptyWeapon(s32 right, s32 left);
 
+#ifndef PORT
+/* N64 boss.c, after the default memory tokens: a test ROM's own tokens
+ * (boot straight into a level, log to the IS-Viewer port). */
+void randoBootTokens(void);
+/* N64 boss.c, after the heap is split into pools: with an Expansion Pak the
+ * level heap moves to its extra 4 MB. */
+void randoUseExpansionPak(void);
+#endif
+
 /* propobj.c ammo_collected_from_weapon: guns dropped by guards give 5 rounds. */
 s32  randoGuardDropAmmo(WeaponObjRecord *weapon, s32 qty);
 

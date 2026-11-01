@@ -1,0 +1,698 @@
+diff --git a/ld/game.bss.ld.inc b/ld/game.bss.ld.inc
+index 42b2b5f7..30d5dac2 100644
+--- a/ld/game.bss.ld.inc
++++ b/ld/game.bss.ld.inc
+@@ -137,3 +137,4 @@
+ #ifndef VERSION_EU
+       build/OUTCODE/src/game/spectrum.o (.bss);
+ #endif
++      build/OUTCODE/src/game/rando.o (.bss);
+diff --git a/ld/game.data.ld.inc b/ld/game.data.ld.inc
+index 811be6c5..2689b933 100644
+--- a/ld/game.data.ld.inc
++++ b/ld/game.data.ld.inc
+@@ -135,3 +135,4 @@
+ #ifndef VERSION_EU
+       build/OUTCODE/src/game/spectrum.o (.data);
+ #endif
++      build/OUTCODE/src/game/rando.o (.data);
+diff --git a/ld/game.rodata.ld.inc b/ld/game.rodata.ld.inc
+index 2c43979e..3f82430d 100644
+--- a/ld/game.rodata.ld.inc
++++ b/ld/game.rodata.ld.inc
+@@ -137,3 +137,4 @@
+ #ifndef VERSION_EU
+       build/OUTCODE/src/game/spectrum.o (.rodata);
+ #endif
++      build/OUTCODE/src/game/rando.o (.rodata);
+diff --git a/ld/game.text.ld.inc b/ld/game.text.ld.inc
+index dab58ca7..c44f3425 100644
+--- a/ld/game.text.ld.inc
++++ b/ld/game.text.ld.inc
+@@ -136,3 +136,4 @@
+ #ifndef VERSION_EU
+       build/OUTCODE/src/game/spectrum.o (.text);
+ #endif
++      build/OUTCODE/src/game/rando.o (.text);
+diff --git a/src/boss.c b/src/boss.c
+index bfad266f..4b41942b 100644
+--- a/src/boss.c
++++ b/src/boss.c
+@@ -1,3 +1,4 @@
++#include "game/rando.h"
+ #include <os_extension.h>
+ #include <PR/os.h>
+ #include "bondview.h"
+@@ -208,6 +209,9 @@ void bossInitMainthreadData(void)
+     {
+         tokenSetString("          -ml0 -me0 -mgfx100 -mvtx50 -mt700 -ma400");
+     }
++#ifdef GE_RANDOMIZER
++    randoBootTokens();   /* test ROMs: -level_NN -hardN -rlog from the cartridge */
++#endif
+ 
+     if (tokenFind(1, "-m") != 0)
+     {
+@@ -216,6 +220,9 @@ void bossInitMainthreadData(void)
+ 
+     start = (PHYS_TO_K0(osVirtualToPhysical(&_bssSegmentEnd)));
+     mempCheckMemflagTokens(start, ((u32)tlbmanageGetTlbAllocatedBlock() - (u32)start));
++#ifdef GE_RANDOMIZER
++    randoUseExpansionPak();   /* the level heap moves to the Expansion Pak's 4 MB */
++#endif
+     mempResetBank(MEMPOOL_PERMANENT);
+     langInit();
+     lvInit();
+diff --git a/src/c_data_filler.c b/src/c_data_filler.c
+index eca04632..d9675c12 100644
+--- a/src/c_data_filler.c
++++ b/src/c_data_filler.c
+@@ -2,5 +2,5 @@
+ #include "c_data_filler.h"
+ 
+ //this defines the size of blank area to store compressed code at
+-u8 c_data_array[0x11c00] = {0};
++u8 c_data_array[0x14000] = {0};
+ 
+diff --git a/src/c_data_filler.h b/src/c_data_filler.h
+index e9826216..217e76fe 100644
+--- a/src/c_data_filler.h
++++ b/src/c_data_filler.h
+@@ -2,6 +2,6 @@
+ #define _C_DATA_FILLER_H_
+ #include <ultra64.h>
+ 
+-extern u8 c_data_array[0x11c00];
++extern u8 c_data_array[0x14000];
+ 
+ #endif
+diff --git a/src/game/bondinv.c b/src/game/bondinv.c
+index e24af90a..4306bfe1 100644
+--- a/src/game/bondinv.c
++++ b/src/game/bondinv.c
+@@ -6,6 +6,7 @@
+ #include <bondconstants.h>
+ #include "language.h"
+ #include "bondinv.h"
++#include "rando.h"
+ #include "gun.h"
+ #include "lv.h"
+ #include <bondtypes.h>
+@@ -1075,6 +1076,14 @@ u16 *bondinvGetNameByIndex(s32 index)
+         if (item->type == INV_ITEM_PROP)
+         {
+             PropRecord *prop = item->type_inv_item.type_prop.prop;
++#ifdef GE_RANDOMIZER
++            char *randoname = randoInvName(prop->obj);
++
++            if (randoname)
++            {
++                return (u16 *)randoname;
++            }
++#endif
+             override         = bondinvGetTextbyObj(prop->obj);
+ 
+             if (override)
+@@ -1135,6 +1144,14 @@ u16 *bondinvGetLongNameByIndex(s32 index)
+         if (item->type == INV_ITEM_PROP)
+         {
+             PropRecord *prop = item->type_inv_item.type_prop.prop;
++#ifdef GE_RANDOMIZER
++            char *randoname = randoInvName(prop->obj);
++
++            if (randoname)
++            {
++                return (u16 *)randoname;
++            }
++#endif
+             override         = bondinvGetTextbyObj(prop->obj);
+ 
+             if (override)
+diff --git a/src/game/bondview2.c b/src/game/bondview2.c
+index 677ea82b..53dfe24f 100644
+--- a/src/game/bondview2.c
++++ b/src/game/bondview2.c
+@@ -157,6 +157,7 @@
+ #define FLOAT_TEN_B 10.00f
+ 
+ #include "bondview_internal.h"
++#include "rando.h"
+ 
+ #define a8s "%8s"
+ #define aX4_0f "x %4.0f"
+@@ -262,6 +263,9 @@ s32 watch_time_0;
+  * EU .bss 80068508
+ */
+ char stringbuffer_lowerleft[0x5][BONDVIEW_HUD_MSG_BOTTOM_BUFFER_LENGTH];
++#ifdef GE_RANDOMIZER
++static u8 s_randoMsgHighlight[0x5];   /* message slot shows a randomizer item pickup */
++#endif
+ char dword_CODE_bss_80079c21[0x04];
+ 
+ #if defined(BUGFIX_R1)
+@@ -9762,6 +9766,10 @@ void hudmsgBottomShow(char *mess)
+             strncpy(stringbuffer_lowerleft[index], mess, MAXMESSAGELEN);
+             display_statusbar++;
+             stringbuffer_lowerleft[index][MAXMESSAGELEN] = 0;
++#ifdef GE_RANDOMIZER
++            s_randoMsgHighlight[index] = g_randoHighlightMsg;
++            g_randoHighlightMsg = FALSE;
++#endif
+         }
+     }
+     else
+@@ -9903,7 +9911,12 @@ Gfx* hudmsgBottomRender(Gfx* arg0)
+ 
+             view_vert = view_top - view_top_offset;
+             arg0 = draw_blackbox_to_screen(arg0, (s32) &view_left, (s32) &view_vert, (s32) &view_horiz, (s32) &view_top);
++#ifdef GE_RANDOMIZER
++            /* randomizer item pickups: soft yellow instead of white */
++            arg0 = combiner_bayer_lod_perspective(textRenderOutlined(arg0, &view_left, &view_vert, stringbuffer_lowerleft[status_bar_text_buffer_index], BONDVIEW_2ND_FONTTABLE(status_bar_text_buffer_index), BONDVIEW_1ST_FONTTABLE(status_bar_text_buffer_index), s_randoMsgHighlight[status_bar_text_buffer_index] ? 0xFFE066FF : -1, 0x646464FFU, (s16) (s32) viGetX(), (s16) viGetY(), 0, 0));
++#else
+             arg0 = combiner_bayer_lod_perspective(textRenderOutlined(arg0, &view_left, &view_vert, stringbuffer_lowerleft[status_bar_text_buffer_index], BONDVIEW_2ND_FONTTABLE(status_bar_text_buffer_index), BONDVIEW_1ST_FONTTABLE(status_bar_text_buffer_index), -1, 0x646464FFU, (s16) (s32) viGetX(), (s16) viGetY(), 0, 0));
++#endif
+         }
+     }
+ 
+diff --git a/src/game/bondview_r.c b/src/game/bondview_r.c
+index 48cd0243..7d341b92 100644
+--- a/src/game/bondview_r.c
++++ b/src/game/bondview_r.c
+@@ -14,6 +14,7 @@
+ #include "game/player.h"
+ #include "game/ramromreplay.h"
+ #include "game/stan.h"
++#include "game/rando.h"
+ 
+ 
+ /**
+@@ -193,6 +194,9 @@ void bondviewLoadSetupIntroSection(void)
+                 {
+                     intro_item = (struct SetupIntroItem*)intro_record;
+ 
++#ifdef GE_RANDOMIZER
++                    if (randoSkipVanillaLoadout()) { /* carried inventory replaces it */ } else
++#endif
+                     if (check_ramrom_flags() == intro_item->is_demo_playback)
+                     {
+                         weaponLoadProjectileModels(intro_item->item_right);
+@@ -228,6 +232,9 @@ void bondviewLoadSetupIntroSection(void)
+ 
+                 case INTROTYPE_AMMO:
+                 {
++#ifdef GE_RANDOMIZER
++                    if (randoSkipVanillaLoadout()) { /* carried inventory replaces it */ } else
++#endif
+                     if (check_ramrom_flags() == ((struct SetupIntroAmmo*)intro_record)->is_demo_playback)
+                     {
+                         give_cur_player_ammo(((struct SetupIntroAmmo*)intro_record)->ammo_type, ((struct SetupIntroAmmo*)intro_record)->ammo_amount);
+@@ -363,6 +370,9 @@ void bondviewLoadSetupIntroSection(void)
+     }
+ 
+     bondinvAddInvItem(ITEM_FIST);
++#ifdef GE_RANDOMIZER
++    randoApplyLoadout(&starting_weapon[GUNRIGHT], &starting_weapon[GUNLEFT], &set_starting_weapon);
++#endif
+ 
+     if (set_starting_weapon == 0)
+     {
+diff --git a/src/game/chr.c b/src/game/chr.c
+index 50544ece..4be29ea3 100644
+--- a/src/game/chr.c
++++ b/src/game/chr.c
+@@ -33,6 +33,7 @@
+ #include "model.h"
+ #include "tex.h"
+ 
++#include "rando.h"
+ #ifdef VERSION_EU
+ #define GROUND_SMOOTH_FACTOR 0.118799984f /* 0x3DF34D68 (PAL-scaled 0.1) */
+ #define FALLSPEED_DECAY      0.8812f      /* 0x3F619653 (PAL-scaled 0.9) */
+@@ -3001,7 +3002,17 @@ Gfx *chrRenderProp(PropRecord *prop, Gfx *gdl, s32 withalpha)
+             }
+ 
+             g_playerPerm->time_other_players_on_screen += 1;
++#ifdef GE_RANDOMIZER
++            {
++                u32 glow = randoGlow(prop);   /* carrying a randomizer item: saturation setting */
++
++                mrData.gdl = randoGlowBegin(mrData.gdl, glow);
++                drawjointlist(&mrData, chr->field_20);
++                mrData.gdl = randoGlowEnd(mrData.gdl, glow);
++            }
++#else
+             drawjointlist(&mrData, chr->field_20);
++#endif
+ 
+             gdl = mrData.gdl;
+ 
+diff --git a/src/game/file.c b/src/game/file.c
+index d350a263..6419f75c 100644
+--- a/src/game/file.c
++++ b/src/game/file.c
+@@ -2,6 +2,7 @@
+ #include "file.h"
+ #include "file2.h"
+ #include "front.h"
++#include "rando.h"
+ 
+ f32 get_007_reaction_speed(void)
+ {
+@@ -39,6 +40,15 @@ void end_of_mission_briefing(void)
+ {
+     s16 var1;
+ 
++#ifdef GE_RANDOMIZER
++    /* Randomizer progress is kept in its own save. Beating the last level
++     * Cradle was waiting on plays the "new cheat unlocked" fanfare. */
++    if (-1 < briefingpage && randoStageCompleted(mission_folder_setup_entries[briefingpage].mission_num))
++    {
++        g_NewCheatUnlocked = TRUE;
++        return;
++    }
++#endif
+     if ((-1 < briefingpage) && selected_difficulty != DIFFICULTY_007 && g_AppendCheatSinglePlayer == FALSE)
+     {
+         var1 = solo_target_time_array[mission_folder_setup_entries[briefingpage].mission_num][selected_difficulty];
+diff --git a/src/game/file2.c b/src/game/file2.c
+index 004247dc..ff855ac9 100644
+--- a/src/game/file2.c
++++ b/src/game/file2.c
+@@ -8,6 +8,7 @@
+ #include "file2.h"
+ #include "front.h"
+ #include "cheat.h"
++#include "rando.h"
+ 
+ 
+ // bss
+@@ -628,6 +629,17 @@ STAGESTATUS fileIsStageUnlockedAtDifficulty(s32 foldernum, LEVEL_SOLO_SEQUENCE l
+     save_data* save;
+     s32 i;
+ 
++#ifdef GE_RANDOMIZER
++    {
++        s32 randostatus;
++
++        if (randoStageStatus(levelid, difficulty, &randostatus))
++        {
++            return randostatus;
++        }
++    }
++#endif
++
+     if (( fileIsFolderValid(foldernum)) &&
+         (levelid >= SP_LEVEL_DAM && levelid < SP_LEVEL_MAX) &&
+         (difficulty >= DIFFICULTY_AGENT && difficulty < DIFFICULTY_MAX))
+@@ -790,6 +802,9 @@ void fileUnlockStageInFolderAtDifficulty(s32 foldernum, LEVEL_SOLO_SEQUENCE stag
+             if (i == difficulty)
+             {
+                 fileCheckSaveStageDifficultyTime(&new_save, stage, i, newtime);
++#ifdef GE_RANDOMIZER
++                randoRecordTime(stage, newtime);   /* the seed's own best, for the status screen */
++#endif
+             }
+             else
+             {
+diff --git a/src/game/front.c b/src/game/front.c
+index 0ac962f2..093b99eb 100644
+--- a/src/game/front.c
++++ b/src/game/front.c
+@@ -179,6 +179,9 @@ s32 mp_char_cur_select_player[MAX_PLAYER_COUNT];
+ s32 mp_char_prev_select_player[MAX_PLAYER_COUNT];
+ 
+ #endif
++#ifdef GE_RANDOMIZER
++#include "rando.h"
++#endif
+ 
+ 
+ /**
+@@ -7204,6 +7207,13 @@ Gfx *constructor_menu0D_missioncomplete(Gfx *DL)
+     DL = frontPrintText(DL, &x, &y, text, ptrFontZurichBoldChars, ptrFontZurichBold, 0xFF, viGetX(), viGetY(), 0, 0);
+ 
+     besttime = fileGetSaveStageDifficultyTime( fileGetSaveForFoldernum(selected_folder_num), mission_folder_setup_entries[briefingpage].mission_num, selected_difficulty);
++#ifdef GE_RANDOMIZER
++    if (randoBestTime(mission_folder_setup_entries[briefingpage].mission_num) >= 0)
++    {
++        /* a randomizer seed keeps its own best times: a new seed starts with none */
++        besttime = randoBestTime(mission_folder_setup_entries[briefingpage].mission_num);
++    }
++#endif
+     if ((besttime == 0) || (!(besttime < 0x3FF))) {
+         besttime = -1;
+     }
+diff --git a/src/game/gun.c b/src/game/gun.c
+index 79e69c8a..642cfa11 100644
+--- a/src/game/gun.c
++++ b/src/game/gun.c
+@@ -119,6 +119,7 @@ CartridgeModelFileRecord ejected_cartridge[] = {
+ 	{0, ""}
+ };
+ 
++#include "rando.h"
+ #include <assets/obseg/gun/gunWeaponStats.inc.c>
+ 
+ //D:80033924
+@@ -1065,7 +1066,22 @@ void advance_through_inventory(void)
+     }
+     else
+     {
++#ifdef GE_RANDOMIZER
++        {
++            /* randomizer runs drain guns dry over time: skip weapons with no ammo
++             * left (they stay in the watch inventory and come back with ammo) */
++            ITEM_IDS fromright = nextright, fromleft = nextleft;
++            s32 tries = 0;
++
++            do
++            {
++                bondinvCycleForward(&nextright, &nextleft, FALSE);
++            } while (randoSkipEmptyWeapon(nextright, nextleft) && ++tries < 64
++                     && !(nextright == fromright && nextleft == fromleft));
++        }
++#else
+         bondinvCycleForward(&nextright, &nextleft, FALSE);
++#endif
+     }
+ 
+     gunRequestHandWeaponChange(GUNRIGHT, nextright, 1);
+@@ -1088,7 +1104,22 @@ void backstep_through_inventory(void)
+     }
+     else
+     {
++#ifdef GE_RANDOMIZER
++        {
++            /* randomizer runs drain guns dry over time: skip weapons with no ammo
++             * left (they stay in the watch inventory and come back with ammo) */
++            ITEM_IDS fromright = nextright, fromleft = nextleft;
++            s32 tries = 0;
++
++            do
++            {
++                bondinvCycleBackward(&nextright, &nextleft, FALSE);
++            } while (randoSkipEmptyWeapon(nextright, nextleft) && ++tries < 64
++                     && !(nextright == fromright && nextleft == fromleft));
++        }
++#else
+         bondinvCycleBackward(&nextright, &nextleft, FALSE);
++#endif
+     }
+ 
+     gunRequestHandWeaponChange(GUNRIGHT, nextright, -1);
+diff --git a/src/game/lv.c b/src/game/lv.c
+index 48ef1265..c1d69659 100644
+--- a/src/game/lv.c
++++ b/src/game/lv.c
+@@ -60,6 +60,7 @@
+ #include "unk_092E50.h"
+ #include "frametiming.h"
+ #include "chr.h"
++#include "rando.h"
+ 
+ // bss
+ //CODE.bss:8008C260
+@@ -318,6 +319,10 @@ void lvlStageLoad(s32 stage)
+ 
+     g_CurrentStageToLoad = stage;
+ 
++#ifdef GE_RANDOMIZER
++    randoStageLoad(stage);
++#endif
++
+     // this if block pushes where g_CurrentStageToLoad gets loaded to the
+     // top of the method. Maybe a debug log about which level is loaded.
+     if(0)
+@@ -961,6 +966,10 @@ void lvlManageMpGame(void)
+ {
+     tlbmanageResetCurrentEntriesCount();
+ 
++#ifdef GE_RANDOMIZER
++    randoTick();
++#endif
++
+     if (g_ControlsLockedFlag != 0)
+     {
+         g_ClockTimer = 0;
+diff --git a/src/game/prop.c b/src/game/prop.c
+index 8c877b2c..a0e0cbf0 100644
+--- a/src/game/prop.c
++++ b/src/game/prop.c
+@@ -26,6 +26,7 @@
+ #include "stan.h"
+ #include "model.h"
+ #include "token.h"
++#include "rando.h"
+ 
+ /**
+  * EU .bss 0x80068480
+@@ -1445,6 +1446,10 @@ void proplvreset2(enum LEVELID stageId)
+ 
+         // PD rejoins here
+ 
++#ifdef GE_RANDOMIZER
++        randoPatchSetup(stageId);
++#endif
++
+         if (withchrs)
+         {
+             alloc_init_GUARDdata_entries(load_proptype(PROPDEF_GUARD));
+@@ -1488,7 +1493,11 @@ void proplvreset2(enum LEVELID stageId)
+         for (i8 = 0; i8 < getPlayerCount(); i8++)
+         {
+             set_cur_player(i8);
++#ifdef GE_RANDOMIZER
++            alloc_additional_item_slots(load_proptype(PROPDEF_LINK) + randoExtraInvSlots());
++#else
+             alloc_additional_item_slots(load_proptype(PROPDEF_LINK));
++#endif
+         }
+ 
+         if (g_CurrentSetup.propDefs)
+diff --git a/src/game/propobj.c b/src/game/propobj.c
+index 0ae7a3f4..b958a588 100644
+--- a/src/game/propobj.c
++++ b/src/game/propobj.c
+@@ -63,6 +63,7 @@
+ #else
+ #define OBJECT_INTERACTION_TIMER_DELTA g_GlobalTimerDelta
+ #endif
++#include "rando.h"
+ 
+ #define PROXIMITY_MINE_TRIGGER_DISTANCE 62500.0f
+ 
+@@ -5862,7 +5863,11 @@ s32 objTick(struct PropRecord *prop)
+ 	}
+ 	else
+ 	{
++#ifdef GE_RANDOMIZER
++		var_v1_5 = ((!(obj->runtime_bitflags & RUNTIMEBITFLAG_00000800)) && (!(obj->flags2 & PROPFLAG2_00080000))) ? (posIsOnScreen(prop, &obj->runtime_pos, randoSightSize(prop, getinstsize(model)), applyFogCull)) : (0);
++#else
+ 		var_v1_5 = ((!(obj->runtime_bitflags & RUNTIMEBITFLAG_00000800)) && (!(obj->flags2 & PROPFLAG2_00080000))) ? (posIsOnScreen(prop, &obj->runtime_pos, getinstsize(model), applyFogCull)) : (0);
++#endif
+ 	}
+ 
+ 	if (var_v1_5 != 0)
+@@ -7398,7 +7403,11 @@ Gfx *chrobjRenderProp(PropRecord *prop, Gfx *gdl, s32 arg2)
+ 
+     if ((u8) obj->type != PROPDEF_TINTED_GLASS)
+     {
++#ifdef GE_RANDOMIZER
++        temp_f0 = chrobjFogVisRangeRelated(prop, randoSightSize(prop, getinstsize(obj->model)));
++#else
+         temp_f0 = chrobjFogVisRangeRelated(prop, getinstsize(obj->model));
++#endif
+ 
+         if (((s32) prop->timetoregen > 0) && ((s32) prop->timetoregen < CHROBJ_TIMETOREGEN))
+         {
+@@ -7487,7 +7496,17 @@ Gfx *chrobjRenderProp(PropRecord *prop, Gfx *gdl, s32 arg2)
+ 
+     mrData.fogcolour.word = (sp48.rgba[0] << 0x18) | (sp48.rgba[1] << 0x10) | (sp48.rgba[2] << 0x08) | (sp48.rgba[3] << 0x00);
+ 
++#ifdef GE_RANDOMIZER
++    {
++        u32 glow = randoGlow(prop);   /* a randomizer item still to find, or a crate holding one */
++
++        mrData.gdl = randoGlowBegin(mrData.gdl, glow);
++        sub_GAME_7F04AC20(prop, &mrData, arg2);
++        mrData.gdl = randoGlowEnd(mrData.gdl, glow);
++    }
++#else
+     sub_GAME_7F04AC20(prop, &mrData, arg2);
++#endif
+ 
+     return mrData.gdl;
+ }
+@@ -10259,6 +10278,10 @@ s32 ammo_collected_from_weapon(WeaponObjRecord *weapon)
+         qty *= g_SoloAmmoMultiplier;
+     }
+ 
++#ifdef GE_RANDOMIZER
++    qty = randoGuardDropAmmo(weapon, qty);
++#endif
++
+     return qty;
+ }
+ 
+@@ -10458,10 +10481,32 @@ TICKOP propPickupByPlayer(PropRecord *prop, bool showstring)
+         return TICKOP_NONE;
+     }
+ 
++#ifdef GE_RANDOMIZER
++    if (randoBlockPickup(obj))
++    {
++        return TICKOP_NONE;
++    }
++    {
++        char *randotext = randoOnPickup(obj);
++
++        if (randotext != NULL)
++        {
++            if (showstring)
++            {
++                HUDMESSAGEBOTTOM(randotext);
++            }
++            showstring = FALSE;
++        }
++    }
++#endif
++
+     switch (obj->type)
+     {
+         case PROPDEF_KEY:
+         {
++#ifdef GE_RANDOMIZER
++            if (!g_randoSilentPickup)
++#endif
+             sndPlaySfx((struct ALBankAlt_s *)g_musicSfxBufferPtr, KEYCARD_SFX, 0);
+ 
+             if (showstring)
+@@ -10715,6 +10760,9 @@ TICKOP propPickupByPlayer(PropRecord *prop, bool showstring)
+         case PROPDEF_TINTED_GLASS:
+         default:
+         {
++#ifdef GE_RANDOMIZER
++            if (!g_randoSilentPickup)
++#endif
+             sndPlaySfx((struct ALBankAlt_s *)g_musicSfxBufferPtr, KEYCARD_SFX, 0);
+ 
+             if (showstring)
+@@ -11726,6 +11774,17 @@ bool chrEquipWeapon(WeaponObjRecord *wep, ChrRecord *chr)
+     wep2 = wep;
+     if (wep2->prop && wep2->model)
+     {
++#ifdef GE_RANDOMIZER
++        /* Only weapon-skeleton models have a holding position: a gadget put
++         * in a hand (the GoldenEye Key handed to Dr. Doak) reads a null
++         * animation when drawn. Carry it concealed, like a guard's keycard. */
++        if (wep2->model->obj->Skeleton != &skeleton_prop_weapon)
++        {
++            randoNoteHeldGadget((ObjectRecord *)wep2, chr->chrnum);
++            chrpropReparent(wep2->prop, chr->prop);
++            return TRUE;
++        }
++#endif
+         if (!(wep2->flags & PROPFLAG_CONCEAL_GUN))
+         {
+             if (!chr->weapons_held[hand])
+diff --git a/src/libultrare/io/conteeplongread.c b/src/libultrare/io/conteeplongread.c
+index a12ed629..4698e90b 100644
+--- a/src/libultrare/io/conteeplongread.c
++++ b/src/libultrare/io/conteeplongread.c
+@@ -10,9 +10,7 @@ extern OSMesg __osEepromTimerMsg[4];
+ 
+ s32 osEepromLongRead(OSMesgQueue *mq, u8 address, u8 *buffer, int nbytes) {
+     s32 status = 0;
+-    if (address > 0x40) {
+-        return -1;
+-    }
++    /* range checked per block (a 16K chip has 256) */
+ 
+     while (nbytes > 0) {
+         status = osEepromRead(mq, address, buffer);
+diff --git a/src/libultrare/io/conteeplongwrite.c b/src/libultrare/io/conteeplongwrite.c
+index a6db8ab3..09e73802 100644
+--- a/src/libultrare/io/conteeplongwrite.c
++++ b/src/libultrare/io/conteeplongwrite.c
+@@ -10,9 +10,7 @@ extern OSMesg __osEepromTimerMsg[4];
+ 
+ s32 osEepromLongWrite(OSMesgQueue *mq, u8 address, u8 *buffer, int nbytes) {
+     s32 result = 0;
+-    if (address > 0x40) {
+-        return -1;
+-    }
++    /* range checked per block (a 16K chip has 256) */
+ 
+     while (nbytes > 0) {
+         result = osEepromWrite(mq, address, buffer);
+diff --git a/src/libultrare/io/conteepprobe.c b/src/libultrare/io/conteepprobe.c
+index 1f4e1df8..c9365f13 100644
+--- a/src/libultrare/io/conteepprobe.c
++++ b/src/libultrare/io/conteepprobe.c
+@@ -6,7 +6,9 @@ s32 osEepromProbe(OSMesgQueue *mq) {
+ 
+     __osSiGetAccess();
+     status = __osEepStatus(mq, &sdata);
+-    if (status == 0 && (sdata.type & 0x8000) != 0) {
++    if (status == 0 && (sdata.type & 0xC000) == 0xC000) {
++        status = 2;   /* EEPROM_TYPE_16K */
++    } else if (status == 0 && (sdata.type & 0x8000) != 0) {
+         status = 1;
+     } else {
+         status = 0;
+diff --git a/src/libultrare/io/conteepread.c b/src/libultrare/io/conteepread.c
+index fa566325..1038c263 100644
+--- a/src/libultrare/io/conteepread.c
++++ b/src/libultrare/io/conteepread.c
+@@ -14,15 +14,16 @@ s32 osEepromRead(OSMesgQueue *mq, u8 address, u8 *buffer) {
+     ret = 0;
+     i = 0;
+     ptr = (u8 *) &__osEepPifRam;
+-    if (address > 0x40) {
+-        return -1;
+-    }
+     __osSiGetAccess();
+     ret = __osEepStatus(mq, &data);
+-    if (ret != 0 || data.type != 0x8000) {
+-
++    if (ret != 0 || (data.type != 0x8000 && data.type != 0xC000)) {
++        __osSiRelAccess();
+         return 8;
+     }
++    if (data.type == 0x8000 && address > 0x40) {
++        __osSiRelAccess();
++        return -1;
++    }
+     while (data.status & 0x80) {
+         __osEepStatus(mq, &data);
+     }
+diff --git a/src/libultrare/io/conteepwrite.c b/src/libultrare/io/conteepwrite.c
+index 848eede7..99cbd8b4 100644
+--- a/src/libultrare/io/conteepwrite.c
++++ b/src/libultrare/io/conteepwrite.c
+@@ -17,18 +17,19 @@ s32 osEepromWrite(OSMesgQueue *mq, u8 address, u8 *buffer)
+     ret = 0;
+     ptr = (u8 *)&__osEepPifRam.ramarray;
+ 
+-    if (address > EEPROM_MAXBLOCKS)
+-    {
+-        return -1;
+-    }
+-
+     __osSiGetAccess();
+     ret = __osEepStatus(mq, &sdata);
+ 
+-    if (ret != 0 || sdata.type != CONT_EEPROM)
++    if (ret != 0 || (sdata.type != CONT_EEPROM && sdata.type != 0xC000))
+     {
++        __osSiRelAccess();
+         return CONT_NO_RESPONSE_ERROR;
+     }
++    if (sdata.type == CONT_EEPROM && address > EEPROM_MAXBLOCKS)
++    {
++        __osSiRelAccess();
++        return -1;
++    }
+ 
+     while (sdata.status & CONT_EEPROM_BUSY)
+     {

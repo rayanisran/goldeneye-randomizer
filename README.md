@@ -135,6 +135,47 @@ No Python and nothing else to install.
 To check your ROM: `certutil -hashfile ge007.ntsc-final.z64 SHA1` should
 print `abe01e4aeb033b6c0836819f549c791b26cfde83`.
 
+## Playing on an N64 (EverDrive) - experimental
+
+The randomizer also builds as a real N64 ROM, for a flashcart or an emulator.
+It is the original game built from the decompilation with the randomizer
+compiled in, so it plays like the cartridge.
+
+> **Untested on real hardware so far.** In Mupen64Plus every level of several
+> seeds loads with the randomizer's items and runs, on Agent and 00 Agent.
+> Picking items up, finishing levels, the menus and Cradle haven't been
+> played through on the N64 yet.
+
+- **Needs an Expansion Pak.** The randomizer's items and their models don't
+  fit in the stock 4 MB; with the Pak the level heap moves to its extra 4 MB.
+- **Save type: 16K EEPROM.** The ROM header asks for it, and EverDrive OS 3.x
+  (X7, X5, X3, V3), SummerCart64, Mupen64Plus and ares pick it up. On an
+  EverDrive 2.5 or in Project64, set the save type to EEPROM 16K by hand. Without
+  it the game says "No 16K EEPROM: progress won't save".
+- Items don't glow on the N64 (that setting is switched off in the ROM); the
+  other settings carry over.
+
+Building it needs Linux or WSL (Ubuntu: `apt install binutils-mips-linux-gnu
+build-essential python3 git curl`). Once, the base ROM from your own ROM:
+
+```bash
+bash randomizer/n64/build_base.sh ge007.ntsc-final.z64      # -> randomizer/n64/build/ge007-rando-base.z64
+```
+
+Then a ROM per seed: in the launcher, **N64 ROM...** under *Current seed*
+saves the current seed as a `.z64` (it finds the base ROM in
+`randomizer/n64/build/`, or asks for it). Or from the command line (any OS;
+same settings flags as the generator, defaults original locations, satellite
+codes, advanced logic, Agent):
+
+```bash
+python -m randomizer.n64rom --base randomizer/n64/build/ge007-rando-base.z64 --out rando.z64 --spoiler spoiler.txt
+python -m randomizer.n64rom --base ... --out rando.z64 --race 11-e978-A3-4FNP1QRP
+```
+
+`python -m randomizer.n64.validate --base ... --emulator <mupen64plus folder>`
+boots every level of a few seeds in Mupen64Plus and checks each one runs.
+
 ## Racing
 
 1. One player sets up a seed and presses **Copy race code**. A code looks like
