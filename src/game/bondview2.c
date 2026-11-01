@@ -167,6 +167,7 @@
 #define FLOAT_TEN_B 10.00f
 
 #include "bondview_internal.h"
+#include "rando.h"
 
 #define a8s "%8s"
 #define aX4_0f "x %4.0f"
@@ -285,6 +286,9 @@ s32 watch_time_0;
  * EU .bss 80068508
 */
 char stringbuffer_lowerleft[0x5][BONDVIEW_HUD_MSG_BOTTOM_BUFFER_LENGTH];
+#ifdef GE_RANDOMIZER
+static u8 s_randoMsgHighlight[0x5];   /* message slot shows a randomizer item pickup */
+#endif
 char dword_CODE_bss_80079c21[0x04];
 
 #if defined(BUGFIX_R1)
@@ -10192,6 +10196,10 @@ void hudmsgBottomShow(char *mess)
             strncpy(stringbuffer_lowerleft[index], mess, MAXMESSAGELEN);
             display_statusbar++;
             stringbuffer_lowerleft[index][MAXMESSAGELEN] = 0;
+#ifdef GE_RANDOMIZER
+            s_randoMsgHighlight[index] = g_randoHighlightMsg;
+            g_randoHighlightMsg = FALSE;
+#endif
         }
     }
     else
@@ -10337,7 +10345,12 @@ Gfx* hudmsgBottomRender(Gfx* arg0)
 #else
             arg0 = draw_blackbox_to_screen(arg0, (s32) &view_left, (s32) &view_vert, (s32) &view_horiz, (s32) &view_top);
 #endif
+#ifdef GE_RANDOMIZER
+            /* randomizer item pickups: soft yellow instead of white */
+            arg0 = combiner_bayer_lod_perspective(textRenderOutlined(arg0, &view_left, &view_vert, stringbuffer_lowerleft[status_bar_text_buffer_index], BONDVIEW_2ND_FONTTABLE(status_bar_text_buffer_index), BONDVIEW_1ST_FONTTABLE(status_bar_text_buffer_index), s_randoMsgHighlight[status_bar_text_buffer_index] ? 0xFFE066FF : -1, 0x646464FFU, (s16) (s32) viGetX(), (s16) viGetY(), 0, 0));
+#else
             arg0 = combiner_bayer_lod_perspective(textRenderOutlined(arg0, &view_left, &view_vert, stringbuffer_lowerleft[status_bar_text_buffer_index], BONDVIEW_2ND_FONTTABLE(status_bar_text_buffer_index), BONDVIEW_1ST_FONTTABLE(status_bar_text_buffer_index), -1, 0x646464FFU, (s16) (s32) viGetX(), (s16) viGetY(), 0, 0));
+#endif
         }
     }
 

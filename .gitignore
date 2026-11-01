@@ -205,3 +205,9 @@ tools_pc/sweep-captures/**/*.ppm
 # referenced by no project tooling. Never commit.
 /Python/
 docs/media/*.mp4
+
+# Randomizer: generated survey catalog and seed outputs (regenerable)
+randomizer/build/
+__pycache__/
+/stickcal.txt
+!/randomizer/data/

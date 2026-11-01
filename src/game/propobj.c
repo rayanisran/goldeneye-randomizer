@@ -63,6 +63,7 @@
 #include "envflag.h"   /* cached getenv for per-tick probes (D302) */
 #include "drawdistgameplay.h"
 #endif
+#include "rando.h"
 
 
 #if defined(VERSION_JP) || defined(VERSION_EU)
@@ -5901,7 +5902,11 @@ s32 objTick(struct PropRecord *prop)
 	}
 	else
 	{
+#ifdef GE_RANDOMIZER
+		var_v1_5 = ((!(obj->runtime_bitflags & RUNTIMEBITFLAG_00000800)) && (!(obj->flags2 & PROPFLAG2_00080000))) ? (posIsOnScreen(prop, &obj->runtime_pos, randoSightSize(prop, getinstsize(model)), applyFogCull)) : (0);
+#else
 		var_v1_5 = ((!(obj->runtime_bitflags & RUNTIMEBITFLAG_00000800)) && (!(obj->flags2 & PROPFLAG2_00080000))) ? (posIsOnScreen(prop, &obj->runtime_pos, getinstsize(model), applyFogCull)) : (0);
+#endif
 	}
 
 	if (var_v1_5 != 0)
@@ -7477,7 +7482,11 @@ Gfx *chrobjRenderProp(PropRecord *prop, Gfx *gdl, s32 arg2)
 
     if ((u8) obj->type != PROPDEF_TINTED_GLASS)
     {
+#ifdef GE_RANDOMIZER
+        temp_f0 = chrobjFogVisRangeRelated(prop, randoSightSize(prop, getinstsize(obj->model)));
+#else
         temp_f0 = chrobjFogVisRangeRelated(prop, getinstsize(obj->model));
+#endif
 
         if (((s32) prop->timetoregen > 0) && ((s32) prop->timetoregen < CHROBJ_TIMETOREGEN))
         {
@@ -7566,7 +7575,17 @@ Gfx *chrobjRenderProp(PropRecord *prop, Gfx *gdl, s32 arg2)
 
     mrData.fogcolour.word = (sp48.rgba[0] << 0x18) | (sp48.rgba[1] << 0x10) | (sp48.rgba[2] << 0x08) | (sp48.rgba[3] << 0x00);
 
+#ifdef GE_RANDOMIZER
+    {
+        u32 glow = randoGlow(prop);   /* a randomizer item still to find, or a crate holding one */
+
+        mrData.gdl = randoGlowBegin(mrData.gdl, glow);
+        sub_GAME_7F04AC20(prop, &mrData, arg2);
+        mrData.gdl = randoGlowEnd(mrData.gdl, glow);
+    }
+#else
     sub_GAME_7F04AC20(prop, &mrData, arg2);
+#endif
 
     return mrData.gdl;
 }
@@ -10430,6 +10449,10 @@ s32 ammo_collected_from_weapon(WeaponObjRecord *weapon)
         qty *= g_SoloAmmoMultiplier;
     }
 
+#ifdef GE_RANDOMIZER
+    qty = randoGuardDropAmmo(weapon, qty);
+#endif
+
     return qty;
 }
 
@@ -10636,6 +10659,25 @@ TICKOP propPickupByPlayer(PropRecord *prop, bool showstring)
     {
         return TICKOP_NONE;
     }
+
+#ifdef GE_RANDOMIZER
+    if (randoBlockPickup(obj))
+    {
+        return TICKOP_NONE;
+    }
+    {
+        char *randotext = randoOnPickup(obj);
+
+        if (randotext != NULL)
+        {
+            if (showstring)
+            {
+                HUDMESSAGEBOTTOM(randotext);
+            }
+            showstring = FALSE;
+        }
+    }
+#endif
 
     switch (obj->type)
     {

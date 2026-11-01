@@ -18,6 +18,7 @@
 #include "game/player.h"
 #include "game/ramromreplay.h"
 #include "game/stan.h"
+#include "game/rando.h"
 
 
 /**
@@ -201,6 +202,9 @@ void bondviewLoadSetupIntroSection(void)
                 {
                     intro_item = (struct SetupIntroItem*)intro_record;
 
+#ifdef GE_RANDOMIZER
+                    if (randoSkipVanillaLoadout()) { /* carried inventory replaces it */ } else
+#endif
                     if (check_ramrom_flags() == intro_item->is_demo_playback)
                     {
                         weaponLoadProjectileModels(intro_item->item_right);
@@ -240,6 +244,9 @@ void bondviewLoadSetupIntroSection(void)
 
                 case INTROTYPE_AMMO:
                 {
+#ifdef GE_RANDOMIZER
+                    if (randoSkipVanillaLoadout()) { /* carried inventory replaces it */ } else
+#endif
                     if (check_ramrom_flags() == ((struct SetupIntroAmmo*)intro_record)->is_demo_playback)
                     {
                         give_cur_player_ammo(((struct SetupIntroAmmo*)intro_record)->ammo_type, ((struct SetupIntroAmmo*)intro_record)->ammo_amount);
@@ -443,6 +450,9 @@ void bondviewLoadSetupIntroSection(void)
     }
 
     bondinvAddInvItem(ITEM_FIST);
+#ifdef GE_RANDOMIZER
+    randoApplyLoadout(&starting_weapon[GUNRIGHT], &starting_weapon[GUNLEFT], &set_starting_weapon);
+#endif
 #ifdef PORT
     /* TEMP D303 (M-201): test-only start weapon, GE_STARTWEAPON=<ITEM_IDS>,
      * so headless repros can hold a specific gun. Inert unset. */

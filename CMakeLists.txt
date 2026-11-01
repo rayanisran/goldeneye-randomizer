@@ -219,6 +219,12 @@ if(TARGET_IS_64BIT)
   add_definitions(-DPLATFORM_64BIT=1)
 endif()
 
+# Randomizer runtime (src/game/rando.c). Inert until data/rando/seed.bin exists.
+option(GE_RANDOMIZER "Build the randomizer runtime" ON)
+if(GE_RANDOMIZER)
+  add_definitions(-DGE_RANDOMIZER=1)
+endif()
+
 # The decomp is big-endian N64 code with unaligned accesses; these flags are
 # required to compile it cleanly on a little-endian host (same as the PD port).
 add_compile_options(

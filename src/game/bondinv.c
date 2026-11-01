@@ -6,6 +6,7 @@
 #include <bondconstants.h>
 #include "language.h"
 #include "bondinv.h"
+#include "rando.h"
 #include "gun.h"
 #include "lv.h"
 #include <bondtypes.h>
@@ -1075,6 +1076,14 @@ u16 *bondinvGetNameByIndex(s32 index)
         if (item->type == INV_ITEM_PROP)
         {
             PropRecord *prop = item->type_inv_item.type_prop.prop;
+#ifdef GE_RANDOMIZER
+            char *randoname = randoInvName(prop->obj);
+
+            if (randoname)
+            {
+                return (u16 *)randoname;
+            }
+#endif
             override         = bondinvGetTextbyObj(prop->obj);
 
             if (override)
@@ -1135,6 +1144,14 @@ u16 *bondinvGetLongNameByIndex(s32 index)
         if (item->type == INV_ITEM_PROP)
         {
             PropRecord *prop = item->type_inv_item.type_prop.prop;
+#ifdef GE_RANDOMIZER
+            char *randoname = randoInvName(prop->obj);
+
+            if (randoname)
+            {
+                return (u16 *)randoname;
+            }
+#endif
             override         = bondinvGetTextbyObj(prop->obj);
 
             if (override)

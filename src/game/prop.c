@@ -30,6 +30,7 @@
 #include "stan.h"
 #include "model.h"
 #include "token.h"
+#include "rando.h"
 
 /**
  * EU .bss 0x80068480
@@ -1573,6 +1574,10 @@ void proplvreset2(enum LEVELID stageId)
 
         // PD rejoins here
 
+#ifdef GE_RANDOMIZER
+        randoPatchSetup(stageId);
+#endif
+
         if (withchrs)
         {
             alloc_init_GUARDdata_entries(load_proptype(PROPDEF_GUARD));
@@ -1616,7 +1621,11 @@ void proplvreset2(enum LEVELID stageId)
         for (i8 = 0; i8 < getPlayerCount(); i8++)
         {
             set_cur_player(i8);
+#ifdef GE_RANDOMIZER
+            alloc_additional_item_slots(load_proptype(PROPDEF_LINK) + randoExtraInvSlots());
+#else
             alloc_additional_item_slots(load_proptype(PROPDEF_LINK));
+#endif
         }
 
         if (g_CurrentSetup.propDefs)

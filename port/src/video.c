@@ -1297,6 +1297,12 @@ void videoPumpEvents(void)
             } else if (ev.key.keysym.sym == SDLK_F10 && !ev.key.repeat) {
                 /* F10: port-layer options overlay (the one PC options UI). */
                 optionsOverlayToggle();
+#ifdef GE_RANDOMIZER
+            } else if (ev.key.keysym.sym == SDLK_i && !ev.key.repeat) {
+                /* I: randomizer item list (menus only; a no-op in a level) */
+                extern void optionsRandoListToggle(void);
+                optionsRandoListToggle();
+#endif
             } else if (ev.key.keysym.sym == SDLK_ESCAPE && !ev.key.repeat) {
                 /* Overlay open: ESC backs out of a category, then closes (swallowed). Otherwise
                  * WI-1: in click-to-lock mode ESC frees the captured cursor

@@ -64,6 +64,7 @@
 #include "unk_092E50.h"
 #include "frametiming.h"
 #include "chr.h"
+#include "rando.h"
 
 // bss
 //CODE.bss:8008C260
@@ -321,6 +322,10 @@ void lvlStageLoad(s32 stage)
     struct player_data *player_data;
 
     g_CurrentStageToLoad = stage;
+
+#ifdef GE_RANDOMIZER
+    randoStageLoad(stage);
+#endif
 
     // this if block pushes where g_CurrentStageToLoad gets loaded to the
     // top of the method. Maybe a debug log about which level is loaded.
@@ -1068,6 +1073,10 @@ void lvlSetMultipliersForDifficulty(void)
 void lvlManageMpGame(void)
 {
     tlbmanageResetCurrentEntriesCount();
+
+#ifdef GE_RANDOMIZER
+    randoTick();
+#endif
 
     if (g_ControlsLockedFlag != 0)
     {

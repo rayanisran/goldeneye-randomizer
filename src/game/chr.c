@@ -33,6 +33,7 @@
 #include "model.h"
 #include "tex.h"
 
+#include "rando.h"
 #ifdef PORT
 #include <stdio.h>
 #include <stdlib.h>
@@ -3181,7 +3182,17 @@ Gfx *chrRenderProp(PropRecord *prop, Gfx *gdl, s32 withalpha)
             }
 
             g_playerPerm->time_other_players_on_screen += 1;
+#ifdef GE_RANDOMIZER
+            {
+                u32 glow = randoGlow(prop);   /* carrying a randomizer item: saturation setting */
+
+                mrData.gdl = randoGlowBegin(mrData.gdl, glow);
+                drawjointlist(&mrData, chr->field_20);
+                mrData.gdl = randoGlowEnd(mrData.gdl, glow);
+            }
+#else
             drawjointlist(&mrData, chr->field_20);
+#endif
 
             gdl = mrData.gdl;
 

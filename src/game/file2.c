@@ -8,6 +8,7 @@
 #include "file2.h"
 #include "front.h"
 #include "cheat.h"
+#include "rando.h"
 
 #ifdef PORT
 /* GE_SAVELOG=1: trace the campaign-unlock -> EEPROM write/validate chain
@@ -691,6 +692,17 @@ STAGESTATUS fileIsStageUnlockedAtDifficulty(s32 foldernum, LEVEL_SOLO_SEQUENCE l
 {
     save_data* save;
     s32 i;
+
+#ifdef GE_RANDOMIZER
+    {
+        s32 randostatus;
+
+        if (randoStageStatus(levelid, difficulty, &randostatus))
+        {
+            return randostatus;
+        }
+    }
+#endif
 
 #ifdef PORT
     /* D442 (RULE-2-SIGNOFF, maintainer opt-in port feature): Game.AllUnlocked
