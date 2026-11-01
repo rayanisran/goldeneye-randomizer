@@ -46,7 +46,8 @@ def find_exe(root):
 
 
 def read_progress(rando, code):
-    """(levels beaten, levels total, items found, items total) from the save, or None."""
+    """(levels beaten, levels total, items found, items total, code letters found
+    as "J A _ _ _" or None) from the save, or None."""
     seed_path = rando / "seed.bin"
     if not seed_path.exists():
         return None
@@ -54,13 +55,15 @@ def read_progress(rando, code):
     lo, hi = struct.unpack_from("<II", b, 8)
     nitems = struct.unpack_from("<H", b, 22)[0]
     total = 20 if b[7] & 1 else 18
+    letters = {b[68 + i * 64 + 61]: i for i in range(nitems) if b[68 + i * 64 + 7] == 6}   # KIND_LETTER
     save = rando / f"save-{(hi << 32) | lo:016x}.bin"
-    if not save.exists():
-        return 0, total, 0, nitems
-    s = save.read_bytes()
-    beaten = bin(struct.unpack_from("<I", s, 16)[0]).count("1")
-    found = sum(bin(x).count("1") for x in struct.unpack_from("<4I", s, 20))
-    return beaten, total, found, nitems
+    bits = struct.unpack_from("<8I", save.read_bytes(), 20) if save.exists() else (0,) * 8
+    beaten = bin(struct.unpack_from("<I", save.read_bytes(), 16)[0]).count("1") if save.exists() else 0
+    found = sum(bin(x).count("1") for x in bits)
+    placed = sum(1 for i in range(nitems) if b[68 + i * 64 + 8] != 0xFF)   # 0xFF: left out of the run
+    code = " ".join(c if letters.get(n) is not None and bits[letters[n] >> 5] >> (letters[n] & 31) & 1 else "_"
+                    for n, c in enumerate(gen.CODE_WORD)) if letters else None
+    return beaten, total, found, placed, code
 
 
 class Launcher(tk.Tk):
@@ -85,6 +88,7 @@ class Launcher(tk.Tk):
         self.glow_items = tk.BooleanVar(value=True)
         self.carriers = tk.StringVar(value="greyer")
         self.placement = tk.StringVar(value="anywhere")
+        self.goal = tk.StringVar(value="codes")
         self.seed_text = tk.StringVar()
         self.race_text = tk.StringVar()
         self.status = tk.StringVar()
@@ -120,9 +124,13 @@ class Launcher(tk.Tk):
             row=9, column=1, sticky="w")
         ttk.Label(box, text="doors that are normally open get locked; each new key is named for its level",
                   foreground="#555").grid(row=9, column=2, columnspan=2, sticky="w")
-        ttk.Label(box, text="Seed (blank = random)").grid(row=10, column=0, sticky="w", padx=8, pady=(6, 2))
-        ttk.Entry(box, textvariable=self.seed_text, width=22).grid(row=10, column=1, columnspan=2, sticky="w", pady=(6, 2))
-        ttk.Button(box, text="Generate", command=self.generate_new).grid(row=10, column=3, sticky="e", padx=8, pady=(6, 6))
+        ttk.Label(box, text="Goal").grid(row=10, column=0, sticky="nw", padx=8)
+        for i, key in enumerate(gen.GOALS):
+            ttk.Radiobutton(box, text=gen.GOAL_LABELS[key], value=key, variable=self.goal).grid(
+                row=10 + i, column=1, columnspan=3, sticky="w")
+        ttk.Label(box, text="Seed (blank = random)").grid(row=12, column=0, sticky="w", padx=8, pady=(6, 2))
+        ttk.Entry(box, textvariable=self.seed_text, width=22).grid(row=12, column=1, columnspan=2, sticky="w", pady=(6, 2))
+        ttk.Button(box, text="Generate", command=self.generate_new).grid(row=12, column=3, sticky="e", padx=8, pady=(6, 6))
 
         race = ttk.LabelFrame(self, text="Race: paste the code your opponent sends you")
         race.grid(row=1, column=0, sticky="nsew", **pad)
@@ -136,7 +144,8 @@ class Launcher(tk.Tk):
         ttk.Button(cur, text="Spoiler log...", command=self.open_spoiler).grid(row=1, column=1, sticky="w", pady=6)
         ttk.Button(cur, text="PLAY", command=self.play).grid(row=1, column=2, sticky="e", padx=8, pady=6)
 
-        note = ("Good to know: the covert modem (Dam) and the tracking bug (Frigate) are the same item, so either\n"
+        note = ("Each level opens when you find its clearance, or when you beat the level before it.\n"
+                "Good to know: the covert modem (Dam) and the tracking bug (Frigate) are the same item, so either\n"
                 "one works for both levels. The camera is shared by Bunker 1 and Silo the same way.")
         ttk.Label(self, text=note, foreground="#555").grid(row=3, column=0, sticky="w", padx=12, pady=(0, 10))
 
@@ -147,7 +156,7 @@ class Launcher(tk.Tk):
     def settings(self):
         return gen.Settings(self.diff.get(), self.bonus.get(), self.tier.get(),
                             self.containers.get(), self.handover.get(), int(self.new_locks.get()),
-                            self.glow_items.get(), self.carriers.get(), self.placement.get())
+                            self.glow_items.get(), self.carriers.get(), self.placement.get(), self.goal.get())
 
     def run(self, seed, settings):
         if (self.rando / "seed.bin").exists() and not messagebox.askyesno(
@@ -202,6 +211,8 @@ class Launcher(tk.Tk):
         text = f"Race code:  {code}\nCheck words:  {words}\n{desc}"
         if prog:
             text += f"\nProgress: {prog[0]} of {prog[1]} levels beaten, {prog[2]} of {prog[3]} items found"
+            if prog[4]:
+                text += f", code {prog[4]}"
         self.status.set(text)
 
     def copy_code(self):

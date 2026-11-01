@@ -9,6 +9,7 @@ ITEM_BYTES = 64
 NAME_LEN = 40
 
 KIND_RECORD, KIND_INVENTORY, KIND_CRADLEKEY, KIND_NEWKEY = 0, 1, 2, 3
+KIND_PICKUP, KIND_CLEARANCE, KIND_LETTER = 4, 5, 6   # armor/floor gun, level clearance, code letter
 MODE_PAD, MODE_GUARD, MODE_INSIDE, MODE_SAFE, MODE_START = 0, 1, 2, 3, 4
 NO_LEVEL = 0xFF
 NO_RECORD = 0xFFFF
@@ -30,7 +31,8 @@ class SeedItem:
     name: str            # pickup message for copies the randomizer adds
     ammotype: int = 0    # ammo given on pickup (packs like Control's remote mines)
     ammo: int = 0
-    keybit: int = 0      # KIND_NEWKEY: the door bit this key opens on its home level
+    keybit: int = 0      # KIND_NEWKEY: the door bit this key opens on its home level;
+                         # KIND_CLEARANCE: the SP level it opens; KIND_LETTER: its place in the word
 
     def pack(self):
         name = self.name.encode("ascii", "replace")[:NAME_LEN - 1].ljust(NAME_LEN, b"\0")
@@ -49,6 +51,7 @@ class Seed:
     show_handover: bool = False         # announce items handed over at level start
     glow_items: bool = True             # items still to find pulse gold
     carriers: str = "greyer"            # guards holding one: "greyer" or "same"
+    goal_codes: bool = True             # the code letters and the GoldenEye Key open Cradle
     bonus_parent: tuple = (NO_LEVEL, NO_LEVEL)
     start_pads: list = field(default_factory=lambda: [0] * LEVELS)
     items: list = field(default_factory=list)
@@ -64,7 +67,8 @@ class Seed:
         head = struct.pack("<4sHBBIIIBBHHH", b"GERS", VERSION, self.difficulty,
                            (1 if self.bonus_levels else 0) | (2 if self.show_handover else 0)
                            | (4 if self.glow_items else 0)
-                           | (8 if self.carriers == "greyer" else 0),
+                           | (8 if self.carriers == "greyer" else 0)
+                           | (16 if self.goal_codes else 0),
                            self.seed & 0xFFFFFFFF, (self.seed >> 32) & 0xFFFFFFFF, mask,
                            self.bonus_parent[0], self.bonus_parent[1],
                            len(self.items), len(self.loadout), len(self.topups))

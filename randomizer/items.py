@@ -11,6 +11,8 @@ both ITEM_BUG) give the same capability, so either one satisfies both levels.
 
 from dataclasses import dataclass, field
 
+from . import levels
+
 # PROPDEF record types the randomizer creates
 REC_PROP, REC_KEY, REC_COLLECTABLE, REC_AMMOBOX = 3, 4, 8, 20
 
@@ -39,6 +41,9 @@ class Item:
     cradle_key: bool = False
     diffs: tuple = ("agent", "secret", "00agent")   # difficulties the item exists on
     newlock_bit: int = 0       # key for a new lock: its level's door opens with this key bit
+    clearance: str = None      # mission clearance: opens this level
+    letter: int = -1           # code letter: its place in the code word (Cradle goal)
+    pickup: str = None         # a level's own body armor / floor weapon ("Armour", "Collectable")
 
     def capabilities(self):
         return (self.key,) + tuple(self.gives)
@@ -116,6 +121,9 @@ POOL = [
            Rec("Key", name="code card", nth=n)) for n in range(3)],   # blast doors A, B, C
     # Aztec
     Item("aztec_smart_card", "Jaws' smart card", "aztec", Rec("Key", name="smart card")),
+    # tagged, but no script or objective uses it: a spare
+    Item("aztec_dat", "the launch protocol DAT", "aztec", Rec("StandardProp", model="PROP_CHRDATTAPE"),
+         progression=False),
     _ld("explosive_floppy", "the explosive floppy", "aztec", "ITEM_EXPLOSIVEFLOPPY", "PROP_CHRMICROCODE"),
     # Egyptian
     Item("golden_gun", "the Golden Gun", "egyptian", Rec("Collectable", item="ITEM_GOLDENGUN"),
@@ -137,5 +145,16 @@ POOL = [
     # (plain guns from start loadouts - sniper rifle, D5K, ZMG - are not items:
     # guards drop guns anyway)
 ]
+
+# Mission clearances: finding one opens its level, as beating the level before
+# it does. Levels open at the start get none (generate.py leaves them out).
+POOL += [Item(f"clear_{lv.key}", f"the {lv.name} clearance", lv.key, model="PROP_CHRPLANS", clearance=lv.key)
+         for lv in levels.ALL if lv.key != "cradle"]
+
+# The code word: with the satellite-code goal, all its letters and the
+# GoldenEye Key open Cradle. Trevelyan's syndicate.
+CODE_WORD = "JANUS"
+POOL += [Item(f"letter_{c.lower()}", f"code letter {c}", None, model="PROP_CHRMICROFILM", letter=n)
+         for n, c in enumerate(CODE_WORD)]
 
 BY_KEY = {it.key: it for it in POOL}

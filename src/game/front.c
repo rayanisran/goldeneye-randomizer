@@ -52,6 +52,9 @@
 #ifdef PORT
 #include "hudaspect.h"   /* D335 front-end pillarbox under native widescreen */
 #endif
+#ifdef GE_RANDOMIZER
+#include "rando.h"
+#endif
 
 
 /**
@@ -7366,6 +7369,13 @@ Gfx *constructor_menu0D_missioncomplete(Gfx *DL)
     DL = frontPrintText(DL, &x, &y, text, ptrFontZurichBoldChars, ptrFontZurichBold, 0xFF, viGetX(), viGetY(), 0, 0);
 
     besttime = fileGetSaveStageDifficultyTime( fileGetSaveForFoldernum(selected_folder_num), mission_folder_setup_entries[briefingpage].mission_num, selected_difficulty);
+#ifdef GE_RANDOMIZER
+    if (randoBestTime(mission_folder_setup_entries[briefingpage].mission_num) >= 0)
+    {
+        /* a randomizer seed keeps its own best times: a new seed starts with none */
+        besttime = randoBestTime(mission_folder_setup_entries[briefingpage].mission_num);
+    }
+#endif
     if ((besttime == 0) || (!(besttime < 0x3FF))) {
         besttime = -1;
     }

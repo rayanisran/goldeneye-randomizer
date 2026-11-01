@@ -34,6 +34,7 @@
    "AMMO_WATCH_MAGNET": 25
   },
   "items": {
+   "ITEM_AK47": 8,
    "ITEM_BOMBDEFUSER": 39,
    "ITEM_BUG": 47,
    "ITEM_CAMERA": 40,
@@ -42,12 +43,17 @@
    "ITEM_EXPLOSIVEFLOPPY": 50,
    "ITEM_GOLDENEYEKEY": 61,
    "ITEM_GOLDENGUN": 19,
+   "ITEM_GRENADELAUNCH": 24,
    "ITEM_KEYANALYSERCASE": 46,
+   "ITEM_M16": 13,
    "ITEM_MP5K": 10,
    "ITEM_MP5KSIL": 11,
    "ITEM_PLASTIQUE": 34,
    "ITEM_REMOTEMINE": 29,
+   "ITEM_ROCKETLAUNCH": 25,
    "ITEM_SKORPION": 7,
+   "ITEM_SNIPERRIFLE": 17,
+   "ITEM_THROWKNIFE": 3,
    "ITEM_TIMEDMINE": 27,
    "ITEM_TT33": 6,
    "ITEM_UZI": 9,
@@ -58,6 +64,8 @@
   },
   "props": {
    "PROP_AMMO_CRATE3": 5,
+   "PROP_BODYARMOUR": 115,
+   "PROP_BODYARMOURVEST": 116,
    "PROP_CHRBLACKBOX": 274,
    "PROP_CHRBLUEPRINTS": 258,
    "PROP_CHRBOMBDEFUSER": 235,
@@ -71,17 +79,27 @@
    "PROP_CHRDOSSIERRED": 270,
    "PROP_CHRGOLDEN": 208,
    "PROP_CHRGOLDENEYEKEY": 248,
+   "PROP_CHRGRENADELAUNCH": 185,
+   "PROP_CHRKALASH": 184,
    "PROP_CHRKEYANALYSERCASE": 241,
    "PROP_CHRKEYBOLT": 244,
    "PROP_CHRKEYYALE": 243,
+   "PROP_CHRM16": 188,
    "PROP_CHRMAP": 260,
    "PROP_CHRMICROCODE": 264,
+   "PROP_CHRMICROFILM": 263,
+   "PROP_CHRMP5K": 189,
+   "PROP_CHRPLANS": 256,
    "PROP_CHRPLASTIQUE": 273,
    "PROP_CHRREMOTEMINE": 199,
+   "PROP_CHRROCKETLAUNCH": 211,
+   "PROP_CHRSNIPERRIFLE": 210,
    "PROP_CHRSTAFFLIST": 271,
+   "PROP_CHRTHROWKNIFE": 209,
    "PROP_CHRTIMEDMINE": 201,
    "PROP_CHRVIDEOTAPE": 275,
    "PROP_CHRWEAPONCASE": 242,
+   "PROP_CHRWPPKSIL": 204,
    "PROP_SWIPE_CARD2": 86
   }
  },
@@ -96,6 +114,33 @@
     "1": 4
    },
    "lock_doors": [],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 257,
+     "model": "PROP_BODYARMOUR",
+     "pad": 10064,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 258,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 10220,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [
     {
@@ -1971,6 +2016,22 @@
      "partner": null
     }
    ],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 301,
+     "model": "PROP_BODYARMOUR",
+     "pad": 161,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -2513,6 +2574,33 @@
      "partner": null
     }
    ],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 118,
+     "model": "PROP_BODYARMOUR",
+     "pad": 39,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 119,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 46,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -2898,8 +2986,173 @@
    "free_key_bits": [],
    "guard_tags": {},
    "lock_doors": [],
+   "pickups": [
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 8,
+     "flags2": 0,
+     "idx": 28,
+     "item": "ITEM_THROWKNIFE",
+     "model": "PROP_CHRTHROWKNIFE",
+     "pad": 10072,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 8,
+     "flags2": 0,
+     "idx": 29,
+     "item": "ITEM_THROWKNIFE",
+     "model": "PROP_CHRTHROWKNIFE",
+     "pad": 10072,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 8,
+     "flags2": 0,
+     "idx": 30,
+     "item": "ITEM_THROWKNIFE",
+     "model": "PROP_CHRTHROWKNIFE",
+     "pad": 10072,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 8,
+     "flags2": 0,
+     "idx": 31,
+     "item": "ITEM_THROWKNIFE",
+     "model": "PROP_CHRTHROWKNIFE",
+     "pad": 10072,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 8,
+     "flags2": 0,
+     "idx": 32,
+     "item": "ITEM_THROWKNIFE",
+     "model": "PROP_CHRTHROWKNIFE",
+     "pad": 10072,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 8,
+     "flags2": 0,
+     "idx": 33,
+     "item": "ITEM_THROWKNIFE",
+     "model": "PROP_CHRTHROWKNIFE",
+     "pad": 10072,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 8,
+     "flags2": 0,
+     "idx": 104,
+     "item": "ITEM_WPPKSIL",
+     "model": "PROP_CHRWPPKSIL",
+     "pad": 43,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 8,
+     "flags2": 0,
+     "idx": 106,
+     "item": "ITEM_WPPKSIL",
+     "model": "PROP_CHRWPPKSIL",
+     "pad": 45,
+     "type": "Collectable"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 216,
+     "model": "PROP_BODYARMOUR",
+     "pad": 48,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 217,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 33,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "item_rec": 104,
+     "link": 105,
+     "needs": [
+      "bunker2_safe_key_1",
+      "bunker2_safe_key_2"
+     ]
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "item_rec": 106,
+     "link": 107,
+     "needs": [
+      "bunker2_safe_key_1",
+      "bunker2_safe_key_2"
+     ]
+    },
     {
      "diffs": [
       "agent",
@@ -3426,6 +3679,34 @@
       "bunker2_safe_key_1",
       "bunker2_safe_key_2"
      ],
+     "note": "inside the safe (link 105)",
+     "ref": 105
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "kind": "safe",
+     "needs": [
+      "bunker2_safe_key_1",
+      "bunker2_safe_key_2"
+     ],
+     "note": "inside the safe (link 107)",
+     "ref": 107
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "kind": "safe",
+     "needs": [
+      "bunker2_safe_key_1",
+      "bunker2_safe_key_2"
+     ],
      "note": "inside the safe (link 110)",
      "ref": 110
     }
@@ -3444,6 +3725,61 @@
    ],
    "guard_tags": {},
    "lock_doors": [],
+   "pickups": [
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 268468224,
+     "flags2": 0,
+     "idx": 140,
+     "inside": 142,
+     "item": "ITEM_M16",
+     "model": "PROP_CHRM16",
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 32768,
+     "flags2": 0,
+     "idx": 141,
+     "inside": 143,
+     "item": "ITEM_M16",
+     "model": "PROP_CHRM16",
+     "type": "Collectable"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 191,
+     "model": "PROP_BODYARMOUR",
+     "pad": 83,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 192,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 142,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -4686,6 +5022,36 @@
    "free_key_bits": [],
    "guard_tags": {},
    "lock_doors": [],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 35,
+     "model": "PROP_BODYARMOUR",
+     "pad": 48,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 36,
+     "model": "PROP_BODYARMOUR",
+     "pad": 229,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -5218,6 +5584,64 @@
    "free_key_bits": [],
    "guard_tags": {},
    "lock_doors": [],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 24,
+     "model": "PROP_BODYARMOUR",
+     "pad": 143,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 25,
+     "model": "PROP_BODYARMOUR",
+     "pad": 131,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 26,
+     "model": "PROP_BODYARMOUR",
+     "pad": 138,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 27,
+     "model": "PROP_BODYARMOUR",
+     "pad": 124,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [],
    "spots": [],
@@ -5371,6 +5795,47 @@
      ],
      "idx": 303,
      "partner": null
+    }
+   ],
+   "pickups": [
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 317,
+     "item": "ITEM_SNIPERRIFLE",
+     "model": "PROP_CHRSNIPERRIFLE",
+     "pad": 112,
+     "type": "Collectable"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 318,
+     "model": "PROP_BODYARMOUR",
+     "pad": 113,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 319,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 114,
+     "type": "Armour"
     }
    ],
    "record_tags": {},
@@ -6656,6 +7121,340 @@
      "partner": 181
     }
    ],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 62,
+     "model": "PROP_BODYARMOUR",
+     "pad": 342,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 63,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 343,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 64,
+     "model": "PROP_BODYARMOUR",
+     "pad": 344,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 65,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 345,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 66,
+     "model": "PROP_BODYARMOUR",
+     "pad": 346,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 67,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 347,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 68,
+     "model": "PROP_BODYARMOUR",
+     "pad": 348,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 69,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 349,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 70,
+     "model": "PROP_BODYARMOUR",
+     "pad": 350,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 71,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 351,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 72,
+     "model": "PROP_BODYARMOUR",
+     "pad": 352,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 73,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 353,
+     "type": "Armour"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 111,
+     "item": "ITEM_AK47",
+     "model": "PROP_CHRKALASH",
+     "pad": 308,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 112,
+     "item": "ITEM_MP5K",
+     "model": "PROP_CHRMP5K",
+     "pad": 306,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 113,
+     "item": "ITEM_MP5K",
+     "model": "PROP_CHRMP5K",
+     "pad": 307,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 114,
+     "item": "ITEM_AK47",
+     "model": "PROP_CHRKALASH",
+     "pad": 309,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 115,
+     "item": "ITEM_AK47",
+     "model": "PROP_CHRKALASH",
+     "pad": 310,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 116,
+     "item": "ITEM_AK47",
+     "model": "PROP_CHRKALASH",
+     "pad": 311,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 117,
+     "item": "ITEM_AK47",
+     "model": "PROP_CHRKALASH",
+     "pad": 312,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 118,
+     "item": "ITEM_AK47",
+     "model": "PROP_CHRKALASH",
+     "pad": 313,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 123,
+     "item": "ITEM_MP5K",
+     "model": "PROP_CHRMP5K",
+     "pad": 322,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 124,
+     "item": "ITEM_MP5K",
+     "model": "PROP_CHRMP5K",
+     "pad": 319,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 125,
+     "item": "ITEM_MP5K",
+     "model": "PROP_CHRMP5K",
+     "pad": 320,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 126,
+     "item": "ITEM_MP5K",
+     "model": "PROP_CHRMP5K",
+     "pad": 321,
+     "type": "Collectable"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 133,
+     "item": "ITEM_ROCKETLAUNCH",
+     "model": "PROP_CHRROCKETLAUNCH",
+     "pad": 326,
+     "type": "Collectable"
+    }
+   ],
    "record_tags": {},
    "safes": [
     {
@@ -7130,6 +7929,50 @@
      ],
      "idx": 18,
      "partner": null
+    }
+   ],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 53,
+     "model": "PROP_BODYARMOUR",
+     "pad": 179,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 54,
+     "model": "PROP_BODYARMOUR",
+     "pad": 180,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 55,
+     "model": "PROP_BODYARMOUR",
+     "pad": 181,
+     "type": "Armour"
     }
    ],
    "record_tags": {},
@@ -7632,6 +8475,33 @@
      ],
      "idx": 104,
      "partner": null
+    }
+   ],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 313,
+     "model": "PROP_BODYARMOUR",
+     "pad": 204,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 314,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 215,
+     "type": "Armour"
     }
    ],
    "record_tags": {
@@ -8861,6 +9731,33 @@
      "partner": null
     }
    ],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 131,
+     "model": "PROP_BODYARMOUR",
+     "pad": 10058,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 132,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 10045,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -9423,6 +10320,49 @@
    "free_key_bits": [],
    "guard_tags": {},
    "lock_doors": [],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 506,
+     "model": "PROP_BODYARMOUR",
+     "pad": 524,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 128,
+     "idx": 507,
+     "model": "PROP_BODYARMOUR",
+     "pad": 525,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 508,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 526,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -10162,6 +11102,7 @@
      "partner": null
     }
    ],
+   "pickups": [],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -10516,6 +11457,47 @@
      ],
      "idx": 131,
      "partner": 130
+    }
+   ],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 57,
+     "model": "PROP_BODYARMOUR",
+     "pad": 80,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret"
+     ],
+     "flags1": 1,
+     "flags2": 192,
+     "idx": 58,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 106,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 128,
+     "idx": 59,
+     "model": "PROP_BODYARMOUR",
+     "pad": 227,
+     "type": "Armour"
     }
    ],
    "record_tags": {},
@@ -11314,7 +12296,25 @@
    "free_key_bits": [],
    "guard_tags": {},
    "lock_doors": [],
-   "record_tags": {},
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 128,
+     "idx": 40,
+     "model": "PROP_BODYARMOUR",
+     "pad": 23,
+     "type": "Armour"
+    }
+   ],
+   "record_tags": {
+    "44": 1
+   },
    "safes": [],
    "spots": [
     {
@@ -11386,6 +12386,17 @@
      "kind": "guard",
      "note": "carried by guard 9 (russian infantry)",
      "ref": 9
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "kind": "pad",
+     "note": "dropped when Natalya's timer runs out (the flight recorder originally)",
+     "ref": 22,
+     "tag": 1
     }
    ],
    "start_pad": 21,
@@ -11405,6 +12416,92 @@
    ],
    "guard_tags": {},
    "lock_doors": [],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 134,
+     "model": "PROP_BODYARMOUR",
+     "pad": 272,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 135,
+     "model": "PROP_BODYARMOUR",
+     "pad": 249,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 136,
+     "model": "PROP_BODYARMOUR",
+     "pad": 250,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 137,
+     "model": "PROP_BODYARMOUR",
+     "pad": 251,
+     "type": "Armour"
+    },
+    {
+     "armour": 100,
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1,
+     "flags2": 0,
+     "idx": 138,
+     "model": "PROP_BODYARMOUR",
+     "pad": 252,
+     "type": "Armour"
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 139,
+     "item": "ITEM_GRENADELAUNCH",
+     "model": "PROP_CHRGRENADELAUNCH",
+     "pad": 273,
+     "type": "Collectable"
+    }
+   ],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -11804,6 +12901,22 @@
      ],
      "idx": 183,
      "partner": 182
+    }
+   ],
+   "pickups": [
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "flags1": 1073741825,
+     "flags2": 0,
+     "idx": 110,
+     "item": "ITEM_GRENADELAUNCH",
+     "model": "PROP_CHRGRENADELAUNCH",
+     "pad": 23,
+     "type": "Collectable"
     }
    ],
    "record_tags": {},
@@ -12460,6 +13573,32 @@
      "partner": 76
     }
    ],
+   "pickups": [
+    {
+     "armour": 100,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 86,
+     "model": "PROP_BODYARMOUR",
+     "pad": 10035,
+     "type": "Armour"
+    },
+    {
+     "armour": 50,
+     "diffs": [
+      "agent"
+     ],
+     "flags1": 1,
+     "flags2": 224,
+     "idx": 87,
+     "model": "PROP_BODYARMOURVEST",
+     "pad": 10026,
+     "type": "Armour"
+    }
+   ],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -12692,6 +13831,7 @@
    "free_key_bits": [],
    "guard_tags": {},
    "lock_doors": [],
+   "pickups": [],
    "record_tags": {},
    "safes": [],
    "spots": [
@@ -13931,6 +15071,19 @@
    "idx": 411,
    "model": "PROP_CHRKEYYALE",
    "type": "Key"
+  },
+  "aztec_dat": {
+   "diffs": [
+    "agent",
+    "secret",
+    "00agent"
+   ],
+   "flags1": 19136512,
+   "flags2": 0,
+   "idx": 263,
+   "model": "PROP_CHRDATTAPE",
+   "pad": 142,
+   "type": "StandardProp"
   },
   "aztec_smart_card": {
    "diffs": [

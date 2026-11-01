@@ -71,19 +71,28 @@ def _lockable(cat):
 HANDOVERS = {"archives": {1}}   # Mishkin gives the safe key after his speech
 # The same for items lying where a character stands, whose script hands them
 # over: record index per level.
-HANDOVER_RECORDS = {"facility": {376}}   # Dr. Doak gives the door decoder
-HANDOVER_NOTES = {"facility": "handed over by Dr. Doak (the door decoder originally)"}
+HANDOVER_RECORDS = {
+    "facility": {376},   # Dr. Doak gives the door decoder
+    # The flight recorder waits out of reach until Natalya's timer runs out,
+    # then the script drops it at one of nine pads: whatever sits there now
+    # does the same (left in its out-of-reach place, it could never be had)
+    "statue": {44},
+}
+HANDOVER_NOTES = {"facility": "handed over by Dr. Doak (the door decoder originally)",
+                  "statue": "dropped when Natalya's timer runs out (the flight recorder originally)"}
 
 
-def _safes_and_tags(cat, pool_recs):
+def _safes_and_tags(cat, pool_recs, pickup_recs=()):
     """Safes whose contents are shuffled items (each a hiding spot that needs the
     safe's keys), and tags on items guards carry that the level's script hands
-    over (Mishkin's safe key) - not objective targets, whose tags must stay."""
+    over (Mishkin's safe key) - not objective targets, whose tags must stay.
+    pickup_recs: armor and guns that are shuffled too (Bunker 2's safe holds two
+    PP7s beside the ops manual: missed, their places counted as open floor)."""
     objs = {o["idx"]: o for o in cat["objects"]}
     targets = {p.get("target") for ob in cat["objectives"] for p in ob["parts"]}
     safes = []
     for o in cat["objects"]:
-        if o["type"] != "SafeItem" or o["item_obj"] not in pool_recs:
+        if o["type"] != "SafeItem" or (o["item_obj"] not in pool_recs and o["item_obj"] not in pickup_recs):
             continue
         lock = objs.get(o["safe_door"], {}).get("lock_mask", 0)
         needs = sorted(pool_recs[k["idx"]] for k in cat["objects"]
@@ -97,6 +106,38 @@ def _safes_and_tags(cat, pool_recs):
         if o.get("held_by_guard") in HANDOVERS.get(cat["level"], ()) and o.get("tags")                 and o["idx"] not in targets and o["idx"] in pool_recs:
             tags[str(o["held_by_guard"])] = o["tags"][0]
     return safes, tags, rec_tags
+
+
+# Body armor and guns lying in the open become shuffled items too (each one's
+# place an original location). Not scripted ones: tagged or uncollectable
+# records belong to the level's script (Train's 44 grenades among them).
+PICKUP_WEAPONS = {"ITEM_KNIFE", "ITEM_THROWKNIFE", "ITEM_WPPK", "ITEM_WPPKSIL", "ITEM_TT33", "ITEM_SKORPION",
+                  "ITEM_AK47", "ITEM_UZI", "ITEM_MP5K", "ITEM_MP5KSIL", "ITEM_SPECTRE", "ITEM_M16", "ITEM_FNP90",
+                  "ITEM_SHOTGUN", "ITEM_AUTOSHOT", "ITEM_SNIPERRIFLE", "ITEM_RUGER", "ITEM_GOLDENGUN",
+                  "ITEM_SILVERWPPK", "ITEM_GOLDWPPK", "ITEM_LASER", "ITEM_GRENADELAUNCH", "ITEM_ROCKETLAUNCH",
+                  "ITEM_GRENADE", "ITEM_TIMEDMINE", "ITEM_PROXIMITYMINE", "ITEM_REMOTEMINE"}
+
+
+def _pickups(cat, pool_recs):
+    by_idx = {o["idx"]: o for o in cat["objects"]}
+    out = []
+    for o in cat["objects"]:
+        if o["type"] not in ("Armour", "Collectable") or o["idx"] in pool_recs or o.get("tags") \
+                or o.get("uncollectable") or o.get("held_by_guard") is not None or not o.get("diffs"):
+            continue
+        if o["type"] == "Collectable" and o.get("item") not in PICKUP_WEAPONS:
+            continue
+        # on the floor, or set on something other than a crate (Caverns' pair of
+        # AR33s on two monitors); crates full of guns stay as they are
+        container = by_idx.get(o.get("inside"), {})
+        if o.get("pad") is None and (not container or "CRATE" in (container.get("model") or "")):
+            continue
+        rec = {k: o[k] for k in ("idx", "type", "model", "item", "flags1", "flags2", "diffs", "pad", "inside")
+               if o.get(k) is not None}
+        if o["type"] == "Armour":
+            rec["armour"] = round(o["armour"] * 100 / 65536)   # percent: setups store 1.0 as 65536
+        out.append(rec)
+    return out
 
 
 def build(root):
@@ -115,7 +156,8 @@ def build(root):
         cat = cats[lv.key]
         start = next((s["pad"] for s in cat["intro"]["spawns"] if s["set"] == 0), 0)
         pool_recs = {records[it.key]["idx"]: it.key for it in POOL if it.home == lv.key and it.key in records}
-        safes, tags, rec_tags = _safes_and_tags(cat, pool_recs)
+        pickups = _pickups(cat, pool_recs)
+        safes, tags, rec_tags = _safes_and_tags(cat, pool_recs, {p["idx"] for p in pickups})
         bodies = {o["guard_id"]: o.get("body_name") for o in cat["objects"] if o["type"] == "Guard"}
         found = [dict(kind=s.kind, ref=s.ref, diffs=list(s.diffs), note=s.note) for s in spots.find_spots(cat)]
         for spot in found:
@@ -134,6 +176,7 @@ def build(root):
                                        if p["kind"] == "collect" and p.get("target") is not None}),
             "spots": found,
             "safes": safes,
+            "pickups": pickups,
             "guard_tags": tags,
             "record_tags": rec_tags,
             "unreliable_guards": sorted(g for g, b in bodies.items() if b in spots.NO_VANILLA_CARRIER),
@@ -144,7 +187,8 @@ def build(root):
         | {"ITEM_WPPK", "ITEM_WPPKSIL", "ITEM_MP5K", "ITEM_MP5KSIL", "ITEM_UZI", "ITEM_SKORPION", "ITEM_TT33",
            "ITEM_BUG", "ITEM_CAMERA", "ITEM_PLASTIQUE", "ITEM_REMOTEMINE", "ITEM_WATCHLASER",
            "ITEM_WATCHMAGNETATTRACT"}
-    want_props = {it.model for it in POOL if it.model} | {r.get("model") for r in records.values()}
+    want_props = {it.model for it in POOL if it.model} | {r.get("model") for r in records.values()}         | {p["model"] for lv in lv_out.values() for p in lv["pickups"]}
+    want_items |= {p["item"] for lv in lv_out.values() for p in lv["pickups"] if p.get("item")}
     items = {v: k for k, v in sp.parse_enum(Path(root), "ITEM_IDS").items()}
     props = {v: k for k, v in sp.parse_enum(Path(root), "PROP").items()}
     ammo = {v: k for k, v in sp.parse_enum(Path(root), "AMMOTYPE").items()}

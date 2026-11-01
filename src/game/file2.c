@@ -889,6 +889,9 @@ void fileUnlockStageInFolderAtDifficulty(s32 foldernum, LEVEL_SOLO_SEQUENCE stag
             if (i == difficulty)
             {
                 fileCheckSaveStageDifficultyTime(&new_save, stage, i, newtime);
+#ifdef GE_RANDOMIZER
+                randoRecordTime(stage, newtime);   /* the seed's own best, for the status screen */
+#endif
             }
             else
             {

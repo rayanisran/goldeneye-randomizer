@@ -10,7 +10,8 @@
  *   68  items, RANDO_ITEM_BYTES each:
  *       0 home  1 rectype  2 u16 homerec  4 s16 model  6 s8 weaponnum  7 kind
  *       8 place 9 mode     10 u16 ref     12 u32 flags 16 u32 flags2   20 name[40]
- *       60 u8 ammo type   61 reserved     62 u16 ammo amount (given on pickup)
+ *       60 u8 ammo type   61 key bit / level / letter   62 u16 ammo amount (given on
+ *       pickup; body armor: its amount in percent)
  *   ..  loadout, 4 bytes each: u8 kind (0 weapon, 1 ammo), u8 id, u16 amount
  *   ..  top-ups, 6 bytes each: u8 level, u8 weapon, u8 ammo type, u8 reserved, u16 minimum
  *   ..  (optional) u16 n + new locks, 4 bytes each: u8 level, u8 key bit, u16 door record
@@ -68,9 +69,9 @@ static const char *s_levelNames[] = {
 static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" };
 
 #define RANDO_VERSION       1   /* seed file */
-#define RANDO_SAVE_VERSION  2
+#define RANDO_SAVE_VERSION  4   /* 4: best times; a version 3 save loads without them */
 #define RANDO_LEVELS        20
-#define RANDO_MAX_ITEMS     128
+#define RANDO_MAX_ITEMS     256
 #define RANDO_MAX_LOADOUT   32
 #define RANDO_ITEM_BYTES    64
 #define RANDO_NAME_LEN      40
@@ -84,6 +85,12 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" 
 #define KIND_INVENTORY 1  /* weapon or gadget ITEM_ID: carried in the weapon inventory */
 #define KIND_CRADLEKEY 2  /* the GoldenEye Key that opens Cradle */
 #define KIND_NEWKEY    3  /* key for a new lock: opens its level's locked door(s) */
+#define KIND_PICKUP    4  /* a level's own body armor or floor gun: used up, never carried */
+#define KIND_CLEARANCE 5  /* mission clearance: opens level `keybit` */
+#define KIND_LETTER    6  /* code letter `keybit` of the code word (satellite-code goal) */
+
+#define CODE_WORD      "JANUS"
+#define CODE_LETTERS   5
 
 #define RANDO_MAX_LOCKS 32
 #define RANDO_MAX_TAGS  8
@@ -94,6 +101,8 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" 
 #define OPT_SHOW_HANDOVER  0x02   /* announce items handed over at level start */
 #define OPT_GLOW_ITEMS     0x04   /* items still to find pulse gold, seen from afar */
 #define OPT_CARRIER_GREYER 0x08   /* guards holding one are drawn slightly greyer */
+#define OPT_GOAL_CODES     0x10   /* the code letters and the GoldenEye Key open Cradle,
+                                   * not beating every level */
 
 /* placement modes */
 #define MODE_PAD     0
@@ -101,6 +110,8 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" 
 #define MODE_INSIDE  2
 #define MODE_SAFE    3
 #define MODE_START   4
+
+#define NO_PLACE     0xFF   /* place: left out of the run (original locations, no room) */
 
 #define NOLOAD_ALL   0x000000F0  /* PROPFLAG2 don't load on Agent/SA/00/007 */
 #define PLACE_FLAGS  (PROPFLAG_ASSIGNEDTOCHR | PROPFLAG_INSIDEANOTHEROBJ | PROPFLAG_UNCOLLECTABLE | PROPFLAG_00080000)
@@ -123,7 +134,8 @@ typedef struct RandoItem {
     u32  flags2;
     char name[RANDO_NAME_LEN];
     u8   ammotype;
-    u8   keybit;   /* KIND_NEWKEY: door bit it opens on its home level */
+    u8   keybit;   /* KIND_NEWKEY: door bit it opens on its home level; KIND_CLEARANCE:
+                    * the level it opens; KIND_LETTER: its place in the code word */
     u16  ammo;
 } RandoItem;
 
@@ -164,6 +176,7 @@ typedef struct RandoSave {
     u32  duals[RANDO_ITEM_SLOTS / 32];  /* dual-wield pairs owned (same gun both hands) */
     s8   equipped[2];                   /* right, left held at the end of the last level */
     u8   pad[2];
+    u16  besttime[RANDO_LEVELS];        /* seconds, 0 = not finished yet (version 4) */
 } RandoSave;
 
 static struct {
@@ -194,6 +207,7 @@ static s32 s_nrec;
 static struct { s32 link; s16 pad; } s_safes[RANDO_MAX_SAFES];   /* where each safe's contents sit */
 static s32 s_nsafes;
 static s32 s_playStarted;             /* intro over: handed-over items may be collected */
+static s32 s_cradleOpenAtEntry;       /* Cradle's fanfare plays on the completion that opened it */
 
 s32 g_randoHighlightMsg;
 s32 g_randoSilentPickup;
@@ -324,10 +338,43 @@ static s32 hasCradleKey(void)
     return FALSE;
 }
 
+/* Found items of a kind, by key bit: letters of the code word, clearances. */
+static u32 foundKeybits(s32 kind)
+{
+    u32 bits = 0;
+    s32 i;
+
+    for (i = 0; i < s_seed.nitems; i++)
+    {
+        if (s_seed.items[i].kind == kind && s_seed.items[i].keybit < 32 && itemFound(i))
+        {
+            bits |= 1u << s_seed.items[i].keybit;
+        }
+    }
+    return bits;
+}
+
+static s32 lettersFound(void)
+{
+    u32 bits = foundKeybits(KIND_LETTER);
+    s32 n = 0;
+
+    while (bits)
+    {
+        n += bits & 1;
+        bits >>= 1;
+    }
+    return n;
+}
+
 static s32 cradleUnlocked(void)
 {
     s32 lvl;
 
+    if (s_seed.options & OPT_GOAL_CODES)
+    {
+        return lettersFound() == CODE_LETTERS && hasCradleKey();
+    }
     for (lvl = 0; lvl < RANDO_LEVELS; lvl++)
     {
         if (lvl != SP_LEVEL_CRADLE && levelEnabled(lvl) && !bitGet(&s_save.beaten, lvl))
@@ -348,9 +395,9 @@ static s32 levelUnlocked(s32 lvl)
     {
         return cradleUnlocked();
     }
-    if (s_seed.startmask & (1u << lvl))
+    if ((s_seed.startmask & (1u << lvl)) || (foundKeybits(KIND_CLEARANCE) & (1u << lvl)))
     {
-        return TRUE;
+        return TRUE;   /* open from the start, or its clearance found */
     }
     if (lvl == SP_LEVEL_AZTEC || lvl == SP_LEVEL_EGYPT)
     {
@@ -480,7 +527,7 @@ static void randoLoad(void)
     }
 
     if (!randoIoLoadSave(&s_save) || memcmp(s_save.magic, "GERV", 4) != 0
-        || s_save.version != RANDO_SAVE_VERSION
+        || (s_save.version != RANDO_SAVE_VERSION && s_save.version != 3)
         || s_save.seedlo != s_seed.seedlo || s_save.seedhi != s_seed.seedhi)
     {
         /* new run: starting loadout from the seed, full health, no armour */
@@ -509,11 +556,12 @@ static void randoLoad(void)
 
         randoIoWriteSave(&s_save);
     }
+    s_save.version = RANDO_SAVE_VERSION;   /* a run saved before best times: none yet */
 
     s_seed.loaded = TRUE;
     {
         char open[256] = "", done[256] = "";
-        s32 nfound = 0;
+        s32 nfound = 0, nplaced = 0;
 
         for (i = 0; i < RANDO_LEVELS; i++)
         {
@@ -530,11 +578,17 @@ static void randoLoad(void)
         }
         for (i = 0; i < s_seed.nitems; i++)
         {
-            nfound += itemFound(i);
+            /* left out of the run (original locations): listed only so its own
+             * record stays unloaded */
+            if (s_seed.items[i].place != NO_PLACE)
+            {
+                nplaced++;
+                nfound += itemFound(i);
+            }
         }
         RANDOLOG("=== seed %08x%08x loaded (%s, %d items). Items found %d/%d. Beaten: %s Unlocked: %s\n",
-                 s_seed.seedhi, s_seed.seedlo, s_diffNames[s_seed.difficulty & 3], s_seed.nitems,
-                 nfound, s_seed.nitems, done[0] ? done : "none. ", open[0] ? open : "none");
+                 s_seed.seedhi, s_seed.seedlo, s_diffNames[s_seed.difficulty & 3], nplaced,
+                 nfound, nplaced, done[0] ? done : "none. ", open[0] ? open : "none");
     }
 }
 
@@ -636,6 +690,11 @@ static void buildRecord(ObjectRecord *rec, const RandoItem *it, s32 recindex, s3
         w->LinkedWeaponType = -1;
         w->timer = -1;
     }
+    else if (it->rectype == PROPDEF_ARMOUR)
+    {
+        /* raw as in a setup: level load turns 65536 into 1.0 */
+        *(s32 *)&((BodyArmourRecord *)rec)->initialamount = it->ammo * 65536 / 100;
+    }
     else if (it->rectype == PROPDEF_KEY)
     {
         /* a key away from home opens nothing; a new-lock key opens its level's door */
@@ -667,7 +726,7 @@ static s32 appendWanted(const RandoItem *it, s32 i, s32 lvl, s32 *carried)
     *carried = FALSE;
     if (!itemFound(i))
     {
-        return it->place == lvl && !(it->kind == KIND_RECORD && it->home == lvl);
+        return it->place == lvl && !((it->kind == KIND_RECORD || it->kind == KIND_PICKUP) && it->home == lvl);
     }
     if (it->rectype == PROPDEF_COLLECTABLE)
     {
@@ -724,6 +783,7 @@ void randoPatchSetup(s32 stageId)
     s_playStarted = FALSE;
 
     lvl = currentSoloLevel();
+    s_cradleOpenAtEntry = randoActive() && cradleUnlocked();
     if (!randoActive() || lvl < 0 || g_CurrentSetup.propDefs == NULL)
     {
         return;
@@ -825,7 +885,7 @@ void randoPatchSetup(s32 stageId)
             placeRecord(rec, &given, it->homerec);
             track(rec, i, FALSE, TRUE, it->homerec);
         }
-        else if (it->kind == KIND_RECORD && it->place == lvl)
+        else if ((it->kind == KIND_RECORD || (it->kind == KIND_PICKUP && !itemFound(i))) && it->place == lvl)
         {
             placeRecord(rec, it, it->homerec);
             track(rec, i, FALSE, FALSE, it->homerec);
@@ -1050,7 +1110,7 @@ int randoMenuItemNames(const char **names, int max)
     }
     for (i = 0; i < s_seed.nitems && n < max; i++)
     {
-        if (!itemFound(i))
+        if (!itemFound(i) || s_seed.items[i].kind == KIND_PICKUP)
         {
             continue;
         }
@@ -1079,6 +1139,17 @@ void randoLogEvent(const char *line)
     }
 }
 
+void randoNoteHeldGadget(ObjectRecord *obj, s32 chrnum)
+{
+    static ObjectRecord *s_noted;
+
+    if (s_seed.loaded && obj != s_noted)
+    {
+        s_noted = obj;
+        RANDOLOG("    guard %d carries model %d concealed (no in-hand pose)\n", chrnum, obj->obj);
+    }
+}
+
 s32 randoExtraInvSlots(void)
 {
     /* room for everything the run can carry, on top of the level's own 30 */
@@ -1101,6 +1172,46 @@ s32 randoBlockPickup(ObjectRecord *obj)
         }
     }
     return FALSE;
+}
+
+/* "Code letter N:  J A N _ _", "GoldenEye Key. Code: J A _ _ _", and once
+ * that opens Cradle, "Code complete: JANUS. Cradle is open!". At most ~40
+ * characters: the bottom message runs off the screen past that. */
+static char *codeProgress(const RandoItem *it)
+{
+    static char msg[64];
+    u32 bits = foundKeybits(KIND_LETTER);
+    s32 n, len;
+
+    if (cradleUnlocked())
+    {
+        return it->kind == KIND_LETTER ? "Code complete: " CODE_WORD ". Cradle is open!"
+                                       : "GoldenEye Key. Cradle is open!";
+    }
+    if (it->kind == KIND_LETTER && lettersFound() == CODE_LETTERS)
+    {
+        return "Code complete: " CODE_WORD ". Find the key.";
+    }
+    if (it->kind == KIND_LETTER)
+    {
+        strcpy(msg, "Code letter ");
+        len = strlen(msg);
+        msg[len++] = CODE_WORD[it->keybit % CODE_LETTERS];
+        msg[len++] = ':';
+        msg[len++] = ' ';
+    }
+    else
+    {
+        strcpy(msg, "GoldenEye Key. Code:");
+        len = strlen(msg);
+    }
+    for (n = 0; n < CODE_LETTERS; n++)
+    {
+        msg[len++] = ' ';
+        msg[len++] = (bits & (1u << n)) ? CODE_WORD[n] : '_';
+    }
+    msg[len] = '\0';
+    return msg;
 }
 
 char *randoOnPickup(ObjectRecord *obj)
@@ -1131,6 +1242,20 @@ char *randoOnPickup(ObjectRecord *obj)
                 return show && s_tracked[i].appended && it->name[0] ? it->name : NULL;
             }
 
+            if (it->kind == KIND_PICKUP)
+            {
+                /* armor and guns: the game's own message, and gone for good */
+                if (!itemFound(s_tracked[i].item))
+                {
+                    bitSet(s_save.found, s_tracked[i].item);
+                    randoIoWriteSave(&s_save);
+                    RANDOLOG("    picked up #%d on %s (%s%.2f)\n", s_tracked[i].item, s_levelNames[s_level],
+                             obj->type == PROPDEF_ARMOUR ? "armor " : "gun ",
+                             obj->type == PROPDEF_ARMOUR ? ((BodyArmourRecord *)obj)->amount : 0.0f);
+                }
+                return NULL;
+            }
+
             g_randoHighlightMsg = TRUE;   /* this pickup's message is drawn in yellow */
 
             if (!itemFound(s_tracked[i].item))
@@ -1151,10 +1276,15 @@ char *randoOnPickup(ObjectRecord *obj)
                 }
                 randoIoWriteSave(&s_save);
                 RANDOLOG("    FOUND item #%d on %s: %s\n", s_tracked[i].item, s_levelNames[s_level], it->name);
-                if (it->kind == KIND_CRADLEKEY)
+                if (it->kind == KIND_CRADLEKEY || it->kind == KIND_LETTER)
                 {
-                    RANDOLOG("    (Cradle key in hand; Cradle %s)\n",
-                             cradleUnlocked() ? "is now UNLOCKED" : "still needs every other level beaten");
+                    RANDOLOG("    (GoldenEye Key %s, %d of %d code letters; Cradle %s)\n",
+                             hasCradleKey() ? "found" : "not found", lettersFound(), CODE_LETTERS,
+                             cradleUnlocked() ? "is now UNLOCKED" : "still locked");
+                }
+                if (it->kind == KIND_LETTER || (it->kind == KIND_CRADLEKEY && (s_seed.options & OPT_GOAL_CODES)))
+                {
+                    return codeProgress(it);
                 }
             }
             return s_tracked[i].appended && it->name[0] ? it->name : NULL;
@@ -1265,13 +1395,19 @@ void randoTick(void)
         {
             ObjectRecord *rec = s_tracked[i].rec;
 
-            /* weapons and gadgets handed out at the start lie at Bond's feet and
-             * are picked up the normal way once play starts: forcing a weapon
-             * pickup here frees its prop under us (crashed, 10-31) */
-            if ((s_tracked[i].carried || (s_tracked[i].atstart && rec->type != PROPDEF_COLLECTABLE))
+            /* weapons, gadgets and body armor handed out at the start lie at
+             * Bond's feet and are picked up the normal way once play starts:
+             * forcing a pickup that uses the object up frees its prop under us
+             * (a weapon crashed, 10-31; body armor too, 11-01). Only keys and
+             * documents, which go into the inventory, are put there. */
+            if ((s_tracked[i].carried || s_tracked[i].atstart)
+                && (rec->type == PROPDEF_KEY || rec->type == PROPDEF_PROP)
                 && rec->prop != NULL && !bondinvHasPropInInv(rec->prop))
             {
-                TICKOP op = propPickupByPlayer(rec->prop, (s_seed.options & OPT_SHOW_HANDOVER) != 0);
+                /* a new find is always announced; what's carried in only if the
+                 * seed asks (it would hint which level needs it) */
+                TICKOP op = propPickupByPlayer(rec->prop, s_tracked[i].atstart
+                                                          || (s_seed.options & OPT_SHOW_HANDOVER) != 0);
 
                 propExecuteTickOperation(rec->prop, op);
             }
@@ -1349,7 +1485,7 @@ s32 randoStageCompleted(s32 levelid)
         return FALSE;
     }
 
-    before = cradleUnlocked();
+    before = levelid == s_level ? s_cradleOpenAtEntry : cradleUnlocked();
     if (levelid == s_level)
     {
         snapshot();
@@ -1493,7 +1629,8 @@ u32 randoGlow(PropRecord *prop)
         ObjectRecord *rec = s_tracked[i].rec;
         PropRecord *p = rec->prop;
 
-        if (s_tracked[i].carried || itemFound(s_tracked[i].item) || p == NULL || p->obj != rec)
+        if (s_tracked[i].carried || itemFound(s_tracked[i].item) || p == NULL || p->obj != rec
+            || s_seed.items[s_tracked[i].item].kind == KIND_PICKUP)
         {
             continue;
         }
@@ -1576,6 +1713,28 @@ s32 randoStageStatus(s32 levelid, s32 difficulty, s32 *status)
     return TRUE;
 }
 
+s32 randoBestTime(s32 levelid)
+{
+    if (!randoActive())
+    {
+        return -1;
+    }
+    return levelid >= 0 && levelid < RANDO_LEVELS ? s_save.besttime[levelid] : 0;
+}
+
+void randoRecordTime(s32 levelid, s32 seconds)
+{
+    if (!randoActive() || levelid < 0 || levelid >= RANDO_LEVELS || seconds <= 0)
+    {
+        return;
+    }
+    if (s_save.besttime[levelid] == 0 || seconds < s_save.besttime[levelid])
+    {
+        s_save.besttime[levelid] = (u16)(seconds > 0xFFFF ? 0xFFFF : seconds);
+        randoIoWriteSave(&s_save);
+    }
+}
+
 /* ------------------------------------------------------------ platform I/O */
 
 #ifdef PORT
@@ -1649,9 +1808,12 @@ static s32 randoIoLoadSave(RandoSave *save)
     {
         return FALSE;
     }
+    memset(save, 0, sizeof(*save));
     n = fsRead(f, save, sizeof(*save));
     fsClose(f);
-    return n == (s32)sizeof(*save);
+    /* a version 3 save ends where the best times begin */
+    return n == (s32)sizeof(*save)
+        || (n == (s32)((u8 *)save->besttime - (u8 *)save) && save->version == 3);
 }
 
 static void randoIoWriteSave(const RandoSave *save)

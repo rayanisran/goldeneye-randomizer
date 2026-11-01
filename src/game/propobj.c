@@ -11953,6 +11953,17 @@ bool chrEquipWeapon(WeaponObjRecord *wep, ChrRecord *chr)
     wep2 = wep;
     if (wep2->prop && wep2->model)
     {
+#ifdef GE_RANDOMIZER
+        /* Only weapon-skeleton models have a holding position: a gadget put
+         * in a hand (the GoldenEye Key handed to Dr. Doak) reads a null
+         * animation when drawn. Carry it concealed, like a guard's keycard. */
+        if (wep2->model->obj->Skeleton != &skeleton_prop_weapon)
+        {
+            randoNoteHeldGadget((ObjectRecord *)wep2, chr->chrnum);
+            chrpropReparent(wep2->prop, chr->prop);
+            return TRUE;
+        }
+#endif
         if (!(wep2->flags & PROPFLAG_CONCEAL_GUN))
         {
             if (!chr->weapons_held[hand])

@@ -3,11 +3,13 @@
 A randomizer for *GoldenEye 007* (N64), running on the native
 [GoldenEye 007 PC port](https://github.com/jkdansereau/goldeneye-pc-port)
 (built from the [007 decompilation](https://github.com/n64decomp/007); no
-emulator). Every seed shuffles the campaign's keys, keycards, gadgets and
-objective items between levels, changes which levels are open at the start,
-and is checked by the generator before you play it so it can always be
-beaten. Seeds can be shared as short race codes, so two players can race
-the same game.
+emulator). Every seed shuffles the campaign's keys, keycards, gadgets,
+objective items, body armor and guns between levels, and hides a clearance
+for each level, so any check can open new levels. The goal is to find the
+five letters of the code word **JANUS** and the GoldenEye Key, which open
+Cradle. Every seed is checked by the generator before you play it so it can
+always be beaten. Seeds can be shared as short race codes, so two players
+can race the same game.
 
 > **PC only for now.** A real N64 ROM (or a `.bps` patch for your own ROM, for
 > emulators and flashcarts) is **planned but not built yet**. The game-side
@@ -22,24 +24,38 @@ No ROM and no game data are included. You need your own *GoldenEye 007*
 
 ## How a run works
 
-- **Start:** three levels are open, and Dam is always one of them. The
-  generator never opens two levels next to each other, so the run spreads
-  out. You start with a random light loadout (usually the PP7, sometimes a
-  DD44, Klobb, ZMG or D5K, and maybe a second gun) and a supply of 9 mm.
-- **Unlocking:** beating a campaign level opens the next one in the normal
-  order. When Aztec and Egyptian are on, each one is unlocked by a randomly
-  chosen campaign level.
-- **The goal:** beat every level. Cradle opens only once all the other
-  levels are beaten **and** you've found the GoldenEye Key, which is hidden
-  somewhere like any other item. The GoldenEye Key on the table in Bunker 1
-  is a different one: it's there for that level's "copy the key" objective
-  and doesn't open Cradle.
-- **Items (51 progression items, 56 in total):** door decoders, keycards,
-  keys, the plane ignition key, the bug and covert modem, the camera, the
-  key analyser, the laser and magnet watches, the DAT, the black boxes,
-  the circuit boards, the explosive floppy, the Golden Gun, and so on. Any
-  of them can end up in any level. Extra mine packs are placed too, but
-  they're never required.
+- **Start:** three random levels are open, never two next to each other,
+  so the run spreads out. You start with a random light loadout (usually
+  the PP7, sometimes a DD44, Klobb, ZMG or D5K, and maybe a second gun) and
+  a supply of 9 mm.
+- **Unlocking:** every other level (except Cradle) has a **clearance**
+  hidden somewhere. Finding it opens that level right away. Beating a
+  campaign level still opens the next one in the normal order too, so
+  either way works. When Aztec and Egyptian are on, each one is also opened
+  by beating a randomly chosen campaign level.
+- **The goal (satellite codes, the default):** find the five code letters
+  **J A N U S** and the GoldenEye Key. Together they open Cradle; beat
+  Cradle to win. You don't have to play every level, only the ones your
+  route needs. Picking up a letter shows your progress, like
+  `Code letter N:  J A N _ _`. Letters can share a level, but all five in
+  one level is very rare. The generator makes every seed take you through
+  at least 10 of the 20 levels (about 14 to 16 on a typical seed).
+- **The other goal (beat every level):** Cradle opens once every other
+  level is beaten and you've found the GoldenEye Key.
+- The GoldenEye Key on the table in Bunker 1 is a different one: it's there
+  for that level's "copy the key" objective and doesn't open Cradle.
+- **Items:** door decoders, keycards, keys, the plane ignition key, the bug
+  and covert modem, the camera, the key analyser, the laser and magnet
+  watches, the DAT, the black boxes, the circuit boards, the explosive
+  floppy, the Golden Gun and so on (51 needed items), plus the clearances
+  (16, or 14 without the bonus levels) and the code letters. Any of them
+  can end up in any level.
+- **Body armor and guns:** each level's own body armor and the guns lying
+  in the open are shuffled too, so a rocket launcher can turn up in
+  Facility. They're never required. There are about 74 on Agent, 58 on
+  Secret Agent and 43 on 00 Agent (harder difficulties have less armor).
+  Extra mine packs are placed as well. Grenades the levels' scripts use
+  stay where they are.
 - **Where items go:** at a hiding spot in a level, carried by a guard (kill
   them to get it), inside a safe, in your start loadout for that level (like
   Q's gadgets), or inside crates and barrels if that option is on. Characters
@@ -53,7 +69,10 @@ No ROM and no game data are included. You need your own *GoldenEye 007*
   locked out by an item behind its own door. Every item can be collected,
   including the spare ones (no safe holds its own key). It also requires the run to
   unfold over at least four steps, so seeds don't fall open on the first
-  level.
+  level, and places the code letters and the GoldenEye Key before anything
+  else so they can land anywhere in the game.
+- **Items stay found.** An item counts the moment you pick it up, even if
+  you then die or quit the level, so you can go in for one check and leave.
 - **No resupply:** ammo and gadget charges are yours to manage. Mines and
   grenades you use up can be farmed back from guards.
 - **Progress is saved per seed.** You can switch seeds and come back to one
@@ -71,7 +90,8 @@ All settings are in the launcher and are part of the race code.
 |---|---|---|
 | **Difficulty** | Agent / Secret Agent / 00 Agent | The game difficulty. Harder difficulties have more objectives and so need more items (00 Agent Dam and Frigate each use up a bug, for example). |
 | **Logic** | Easy / Normal / Advanced | Which tricks a seed is allowed to *require*. **Easy:** none. **Normal:** known skips (Facility scientists opening keycard doors, guards opening the doors in Silo, Bunker 1 and Aztec, the Bunker 2 cell warp, Caverns blast doors A and B, Surface 2's comms objective done with any explosive, leaving the Archives interrogation room without the key, Train's door key). **Advanced:** Normal plus glitches. No glitch tricks are listed yet, so for now it behaves like Normal. Each seed relies on a random ~55% of its tier's tricks. The rest still work, the generator just never counts on them. The spoiler log lists which ones a seed may need. |
-| **Item locations** | Anywhere / Original locations only | **Anywhere:** hiding spots across the level and any guard. **Original:** items only go where the original game has an item, so they're shuffled among the vanilla spots. |
+| **Goal** | Satellite codes / Beat every level | **Satellite codes:** J A N U S and the GoldenEye Key open Cradle. **Beat every level:** every other level beaten and the GoldenEye Key open Cradle. Clearances are in both. |
+| **Item locations** | Anywhere / Original locations only | **Anywhere:** hiding spots across the level and any guard. **Original:** items go only where the original game has an item: the keys, documents and gadgets, the guards who carry them, the safes, and every body armor and gun lying in the open (about 110 places on Agent, 95 on Secret Agent, 82 on 00 Agent). There are more items than places, since clearances and code letters have no place of their own: needed items always get one, and the spare body armor and guns that don't fit are left out of the run (listed at the end of the spoiler log). |
 | **Include Aztec and Egyptian** | on / off | Adds the two bonus levels (and their items) to the run. |
 | **Hide items inside crates and barrels** | on / off | Crates and barrels become hiding spots. Shoot them open. |
 | **Announce carried items** | on / off | When a level starts, tells you which items it hands you. That hints at where they're used. |
@@ -85,9 +105,13 @@ All settings are in the launcher and are part of the race code.
 - Picking up an item shows "Picked up ..." with the item's name, and it
   appears in Bond's watch inventory.
 - **Found-items list:** on the menus, press **I** (keyboard) or **L / R**
-  (controller) to show every item found so far. Press again for the next
+  (controller) to show every item found so far, clearances and code letters
+  included (body armor and guns aren't listed). Press again for the next
   page.
-- The level select only lets you start levels the seed has opened.
+- The level select only lets you start levels the seed has opened. A
+  clearance you find opens its level there straight away.
+- Best times on the mission status screen belong to the seed: a new seed
+  starts with none. The save folder's own times are left alone.
 - Everything else (controls, video options, the F10 settings overlay,
   60 fps, mouse aim) is the PC port's. See [PC-PORT.md](PC-PORT.md).
 
@@ -114,7 +138,7 @@ print `abe01e4aeb033b6c0836819f549c791b26cfde83`.
 ## Racing
 
 1. One player sets up a seed and presses **Copy race code**. A code looks like
-   `8-1a2b-A1-4FNP1QRP` and holds the randomizer version, the world-data
+   `11-e978-A3-4FNP1QRP` and holds the randomizer version, the world-data
    fingerprint, all the settings and the seed.
 2. The other players paste it under **Race** and press **Load race seed**.
 3. Before you start, everyone compares the four **check words** (for
@@ -145,8 +169,8 @@ It needs Python 3 with tkinter (tested on 3.11), and it finds `build-pc/ge007.x8
 and `data/` on its own. Seeds can also be made without the GUI:
 
 ```sh
-python -m randomizer.generate --difficulty secret --logic normal --containers
-python -m randomizer.generate --race 8-1a2b-A1-4FNP1QRP
+python -m randomizer.generate --difficulty secret --logic normal --containers --goal codes
+python -m randomizer.generate --race 11-e978-A3-4FNP1QRP
 ```
 
 Seed files land in `data/rando/` (`seed.bin` for the game,

@@ -51,6 +51,13 @@ s32  randoStageCompleted(s32 levelid);
 /* file2.c fileIsStageUnlockedAtDifficulty: TRUE = *status was decided. */
 s32  randoStageStatus(s32 levelid, s32 difficulty, s32 *status);
 
+/* Best times belong to the seed (a new seed starts with none); the save
+ * folder's own times are left alone. front.c mission status: this level's best
+ * in seconds, 0 = none yet, -1 = no seed loaded (use the folder's).
+ * file2.c, a level's time saved: it was finished in `seconds`. */
+s32  randoBestTime(s32 levelid);
+void randoRecordTime(s32 levelid, s32 seconds);
+
 /* bondinv.c watch inventory: name for a record the randomizer added, else NULL. */
 char *randoInvName(ObjectRecord *obj);
 
@@ -60,6 +67,10 @@ int  randoMenuItemNames(const char **names, int max);
 
 /* port input.c: note controller drops/returns in the progress log. */
 void randoLogEvent(const char *line);
+
+/* propobj.c chrEquipWeapon: a guard is given a model that can't be held in
+ * a hand (carried concealed instead); logged once per object. */
+void randoNoteHeldGadget(ObjectRecord *obj, s32 chrnum);
 
 /* prop.c setupLoad: extra inventory slots for the carried items. */
 s32  randoExtraInvSlots(void);
