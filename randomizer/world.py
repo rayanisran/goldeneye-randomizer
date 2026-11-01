@@ -72,6 +72,7 @@ HANDOVERS = {"archives": {1}}   # Mishkin gives the safe key after his speech
 # The same for items lying where a character stands, whose script hands them
 # over: record index per level.
 HANDOVER_RECORDS = {"facility": {376}}   # Dr. Doak gives the door decoder
+HANDOVER_NOTES = {"facility": "handed over by Dr. Doak (the door decoder originally)"}
 
 
 def _safes_and_tags(cat, pool_recs):
@@ -122,6 +123,11 @@ def build(root):
                 spot["tag"] = tags[str(spot["ref"])]
         found += [dict(kind="safe", ref=s["link"], diffs=s["diffs"], note=f"inside the safe (link {s['link']})",
                        needs=s["needs"]) for s in safes]
+        # a character who hands over an item (Dr. Doak) always has one to give
+        by_idx = {o["idx"]: o for o in cat["objects"]}
+        found += [dict(kind="pad", ref=by_idx[int(i)]["pad"], diffs=by_idx[int(i)]["diffs"], tag=t,
+                       note=HANDOVER_NOTES.get(lv.key, "handed over by the level's script"))
+                  for i, t in rec_tags.items()]
         lv_out[lv.key] = {
             "start_pad": start,
             "collect_targets": sorted({p["target"] for ob in cat["objectives"] for p in ob["parts"]

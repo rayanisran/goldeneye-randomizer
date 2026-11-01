@@ -8588,6 +8588,17 @@
      "kind": "guard",
      "note": "carried by guard 50 (russian soldier)",
      "ref": 50
+    },
+    {
+     "diffs": [
+      "agent",
+      "secret",
+      "00agent"
+     ],
+     "kind": "pad",
+     "note": "handed over by Dr. Doak (the door decoder originally)",
+     "ref": 47,
+     "tag": 0
     }
    ],
    "start_pad": 167,

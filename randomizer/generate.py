@@ -36,7 +36,7 @@ CARRIER_LABELS = {"greyer": "Slightly greyer", "same": "Look the same"}
 PLACEMENTS = ("anywhere", "original")   # race-code bit 11
 PLACEMENT_LABELS = {"anywhere": "Anywhere (hiding spots, any soldier)",
                     "original": "Original locations only"}
-LOGIC_VERSION = 8              # bump whenever generation can change for the same code
+LOGIC_VERSION = 9              # bump whenever generation can change for the same code
 DIFFS = ("agent", "secret", "00agent")
 DIFF_CHARS = "ASO"
 ORIGINAL_SAME_LEVEL_WEIGHT = 0.04   # the same target there: few spots per level, so lower
@@ -208,6 +208,8 @@ def allowed(item, spot, homes, own=None, extras=None, prog_keys=None):
     """own: item key -> its original spot (never placed back there).
     extras: original-locations mode - spots only items with no original
     location (the GoldenEye Key, new-lock keys) may use, and only those."""
+    if item.key in spot.needs:
+        return False   # never behind itself (a safe's own key inside it)
     if spot.kind in ("guard", "safe") and not can_guard(item):
         return False   # guards would wield a gadget as a gun
     if spot.level == "cradle" and item.progression:
@@ -365,6 +367,10 @@ def generate(seed, settings, world=None):
             continue                      # original locations: every item needs its place
         if settings.placement == "anywhere":
             fill_safes(rng, placement, all_spots, homes, filler_keys, prog_keys, state, enabled)
+        _, _, collected = state.sweep(set(), placement)
+        if sum(len(step) for step in collected) < len(placement):
+            FAILS["unreachable item"] += 1
+            continue                      # every item collectable, spare ones too (no key locked in a safe it opens)
 
         code = race_code(seed, settings, world)
         return dict(seed=seed, code=code, settings=settings, start=start, parents=parents, tricks=tricks,
@@ -431,6 +437,9 @@ def original_spots(pool, homes, world, diff, enabled):
             continue   # no place of its own in a level (Q's start gadgets too): a hiding spot
         L, home = world["levels"][it.home], homes.get(it.key)
         note = f"where {it.label} is in the original game"
+        tag = L.get("record_tags", {}).get(str(home["idx"]), -1)
+        if tag >= 0:
+            note = next((s["note"] for s in L["spots"] if s.get("tag") == tag and s["kind"] == "pad"), note)
         unreliable = set(L.get("unreliable_guards", []))
         if home.get("held_by_guard") is not None:
             g = home["held_by_guard"]
@@ -449,7 +458,7 @@ def original_spots(pool, homes, world, diff, enabled):
         spots.append(sp)
         own[it.key] = sp
     extras = [spot_from(lv, s, world) for lv in enabled for s in world["levels"][lv]["spots"]
-              if s["kind"] == "pad" and diff in s["diffs"]]
+              if s["kind"] == "pad" and diff in s["diffs"] and s.get("tag", -1) < 0]   # handovers: an original spot above
     return spots + extras, own, set(extras)
 
 
@@ -469,12 +478,16 @@ def swap_in(rng, item, placement, rest, homes, own, extras, filler_keys, prog_ke
 
 
 def fill_safes(rng, placement, all_spots, homes, filler_keys, prog_keys, state, enabled):
-    """A safe is never empty: its key should be worth finding. Move a key or
-    document into any safe the fill left empty - a spare one if there is one,
-    else a needed one, kept only if the seed is still beatable."""
-    for safe in [s for s in all_spots if s.kind == "safe" and s not in placement]:
+    """A safe is never empty: its key should be worth finding. Nor is a
+    character who hands something over (Dr. Doak, Mishkin). Move a key or
+    document into any such spot the fill left empty - a spare one if there is
+    one, else a needed one, kept only if the seed is still beatable."""
+    def must_fill(s):
+        return s.kind == "safe" or s.tag >= 0
+
+    for safe in [s for s in all_spots if must_fill(s) and s not in placement]:
         movable = sorted([(s, it) for s, it in placement.items()
-                          if s.kind != "safe" and allowed(it, safe, homes, prog_keys=prog_keys)],
+                          if not must_fill(s) and allowed(it, safe, homes, prog_keys=prog_keys)],
                          key=lambda m: (m[1].key not in filler_keys, m[0].id, m[0].note))
         spare = [m for m in movable if m[1].key in filler_keys]
         rng.shuffle(spare)

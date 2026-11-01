@@ -84,6 +84,10 @@ f32  randoSightSize(PropRecord *prop, f32 size);
  * message in yellow and clears it. randoTick clears a stale flag each frame. */
 extern s32 g_randoHighlightMsg;
 
+/* Set by randoOnPickup for a silent handover of a carried item: propobj.c
+ * skips the pickup sound. */
+extern s32 g_randoSilentPickup;
+
 #endif /* GE_RANDOMIZER */
 
 #endif /* _RANDO_H_ */

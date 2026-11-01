@@ -104,6 +104,10 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" 
 
 #define NOLOAD_ALL   0x000000F0  /* PROPFLAG2 don't load on Agent/SA/00/007 */
 #define PLACE_FLAGS  (PROPFLAG_ASSIGNEDTOCHR | PROPFLAG_INSIDEANOTHEROBJ | PROPFLAG_UNCOLLECTABLE | PROPFLAG_00080000)
+/* how an object sits on its pad: fall to ground, upside-down / rotated, scale
+ * to pad bounds, absolute position */
+#define SAFE_POS_FLAGS (PROPFLAG_RENDERPOSTBG | PROPFLAG_ONSCREEN | PROPFLAG_ENABLED | PROPFLAG_00000010 \
+                        | PROPFLAG_00000020 | PROPFLAG_00000040 | PROPFLAG_00000080 | PROPFLAG_00001000)
 
 typedef struct RandoItem {
     u8   home;
@@ -192,6 +196,7 @@ static s32 s_nsafes;
 static s32 s_playStarted;             /* intro over: handed-over items may be collected */
 
 s32 g_randoHighlightMsg;
+s32 g_randoSilentPickup;
 static s32 s_snapValid;
 static u32 s_snapWeapons[RANDO_ITEM_SLOTS / 32];
 static u32 s_snapDuals[RANDO_ITEM_SLOTS / 32];
@@ -595,6 +600,11 @@ static void placeRecord(ObjectRecord *rec, const RandoItem *it, s32 recindex)
             rec->pad = (s16)(it->ref - recindex);
             break;
         case MODE_SAFE:
+            /* held in place at the pad like every vanilla safe's contents ("in
+             * air"); an item's own "fall to ground" dropped it onto the top of
+             * the safe instead (Depot safe key, 10-31) */
+            rec->flags &= ~SAFE_POS_FLAGS;
+            rec->flags |= PROPFLAG_00000008;
             rec->pad = safeLink(it->ref, recindex);
             break;
         case MODE_START:
@@ -1097,6 +1107,7 @@ char *randoOnPickup(ObjectRecord *obj)
 {
     s32 i;
 
+    g_randoSilentPickup = FALSE;
     if (s_level < 0)
     {
         return NULL;
@@ -1116,6 +1127,7 @@ char *randoOnPickup(ObjectRecord *obj)
 
                 RANDOLOG("    handed over #%d (camera mode %d)\n", s_tracked[i].item, g_CameraMode);
                 g_randoHighlightMsg = show;
+                g_randoSilentPickup = !show;   /* every carried key beeping at once was one loud beep */
                 return show && s_tracked[i].appended && it->name[0] ? it->name : NULL;
             }
 

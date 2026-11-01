@@ -31,7 +31,9 @@ No ROM and no game data are included. You need your own *GoldenEye 007*
   chosen campaign level.
 - **The goal:** beat every level. Cradle opens only once all the other
   levels are beaten **and** you've found the GoldenEye Key, which is hidden
-  somewhere like any other item.
+  somewhere like any other item. The GoldenEye Key on the table in Bunker 1
+  is a different one: it's there for that level's "copy the key" objective
+  and doesn't open Cradle.
 - **Items (51 progression items, 56 in total):** door decoders, keycards,
   keys, the plane ignition key, the bug and covert modem, the camera, the
   key analyser, the laser and magnet watches, the DAT, the black boxes,
@@ -40,13 +42,16 @@ No ROM and no game data are included. You need your own *GoldenEye 007*
   they're never required.
 - **Where items go:** at a hiding spot in a level, carried by a guard (kill
   them to get it), inside a safe, in your start loadout for that level (like
-  Q's gadgets), or inside crates and barrels if that option is on. On
+  Q's gadgets), or inside crates and barrels if that option is on. Characters
+  who hand you something in the original game always still do: Dr. Doak in
+  Facility and Mishkin in Archives each give you a shuffled item. On
   Surface 1 and 2, floor spots are only used inside huts and buildings, so
   you never have to sweep the open snowfield.
 - **Every seed is beatable.** The generator uses an "assumed fill": each
   required item is placed only where it can be reached without it. It then
   plays the whole seed through on paper before writing it, so you can't get
-  locked out by an item behind its own door. It also requires the run to
+  locked out by an item behind its own door. Every item can be collected,
+  including the spare ones (no safe holds its own key). It also requires the run to
   unfold over at least four steps, so seeds don't fall open on the first
   level.
 - **No resupply:** ammo and gadget charges are yours to manage. Mines and

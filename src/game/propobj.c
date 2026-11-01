@@ -10683,6 +10683,9 @@ TICKOP propPickupByPlayer(PropRecord *prop, bool showstring)
     {
         case PROPDEF_KEY:
         {
+#ifdef GE_RANDOMIZER
+            if (!g_randoSilentPickup)
+#endif
             sndPlaySfx((struct ALBankAlt_s *)g_musicSfxBufferPtr, KEYCARD_SFX, 0);
 
             if (showstring)
@@ -10936,6 +10939,9 @@ TICKOP propPickupByPlayer(PropRecord *prop, bool showstring)
         case PROPDEF_TINTED_GLASS:
         default:
         {
+#ifdef GE_RANDOMIZER
+            if (!g_randoSilentPickup)
+#endif
             sndPlaySfx((struct ALBankAlt_s *)g_musicSfxBufferPtr, KEYCARD_SFX, 0);
 
             if (showstring)
