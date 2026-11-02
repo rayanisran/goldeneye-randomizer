@@ -75,7 +75,9 @@ HANDOVER_RECORDS = {
     "facility": {376},   # Dr. Doak gives the door decoder
     # The flight recorder waits out of reach until Natalya's timer runs out,
     # then the script drops it at one of nine pads: whatever sits there now
-    # does the same (left in its out-of-reach place, it could never be had)
+    # is dropped along with it (left in its out-of-reach place, it could never
+    # be had). The tag itself stays on the flight recorder, which the "find
+    # flight recorder" objective checks (rando.c isScriptDrop).
     "statue": {44},
 }
 HANDOVER_NOTES = {"facility": "handed over by Dr. Doak (the door decoder originally)",

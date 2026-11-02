@@ -246,6 +246,32 @@ index 50544ece..4be29ea3 100644
  
              gdl = mrData.gdl;
  
+diff --git a/src/game/chrai.c b/src/game/chrai.c
+index e7ee9d2b..b45faee7 100644
+--- a/src/game/chrai.c
++++ b/src/game/chrai.c
+@@ -23,6 +23,7 @@
+ #include "player.h"
+ #include "propobj.h"
+ #include "stan.h"
++#include "rando.h"
+ #include <assert.h>
+ #include <bondaicommands.h>
+ #include <bondgame.h>
+@@ -2373,7 +2374,13 @@ void                   ai(PropDefHeaderRecord *Entityp, PROP_TYPE EntityType)
+                     volatile PadRecord *pad;
+                     u16                 padnum = ntohs(ai->PAD);
+                     Mtxf                matrix;
++#ifdef GE_RANDOMIZER
++                    s32                 pass;
+ 
++                    /* the randomizer's item waiting with the script's object (Statue's
++                     * flight recorder) is dropped with it, on the second pass */
++                    for (pass = 0; pass < 2; pass++, obj = randoScriptDropFollower(ai->OBJECT_TAG))
++#endif
+                     if (obj && obj->prop)
+                     {
+                         if (isNotBoundPad(padnum))
 diff --git a/src/game/file.c b/src/game/file.c
 index d350a263..6419f75c 100644
 --- a/src/game/file.c
@@ -434,6 +460,30 @@ index 48ef1265..c1d69659 100644
      if (g_ControlsLockedFlag != 0)
      {
          g_ClockTimer = 0;
+diff --git a/src/game/objective_status.c b/src/game/objective_status.c
+index 4ebf14b1..d3f1253a 100644
+--- a/src/game/objective_status.c
++++ b/src/game/objective_status.c
+@@ -7,6 +7,7 @@
+ #include "PR/os.h"
+ #include "str.h"
+ #include "bondview.h"
++#include "rando.h"
+ 
+ //Public variables - move to header
+ // bss
+@@ -353,6 +354,11 @@ void display_objective_status_text_on_status_change(void)
+         status = get_status_of_objective(i);
+         if (objectiveStatuses[i] != status) {
+             objectiveStatuses[i] = status;
++#ifdef GE_RANDOMIZER
++            /* an objective item the randomizer moved to another level reads as
++             * failed the moment the level loads: not worth a message */
++            if (status == OBJECTIVESTATUS_FAILED && randoQuietObjectives()) { } else
++#endif
+             if (get_difficulty_for_objective(i) <= lvlGetSelectedDifficulty()) {
+                 if (j_text_trigger != 0)
+                 {
 diff --git a/src/game/prop.c b/src/game/prop.c
 index 8c877b2c..a0e0cbf0 100644
 --- a/src/game/prop.c

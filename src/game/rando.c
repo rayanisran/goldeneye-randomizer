@@ -214,6 +214,20 @@ static struct { s32 link; s16 pad; } s_safes[RANDO_MAX_SAFES];   /* where each s
 static s32 s_nsafes;
 static s32 s_playStarted;             /* intro over: handed-over items may be collected */
 static s32 s_cradleOpenAtEntry;       /* Cradle's fanfare plays on the completion that opened it */
+static ObjectRecord *s_dropFollower;  /* dropped wherever the script drops its object (isScriptDrop) */
+
+/* Tags a level's script moves into reach (Statue's flight recorder, dropped
+ * at one of nine pads when Natalya's timer runs out). The item placed at that
+ * object's spot goes with it; the tag itself stays, objectives check it. */
+static s32 isScriptDrop(s32 lvl, s32 tag)
+{
+    return lvl == SP_LEVEL_STATUE && tag == 1;
+}
+
+ObjectRecord *randoScriptDropFollower(s32 tag)
+{
+    return s_level >= 0 && isScriptDrop(s_level, tag) ? s_dropFollower : NULL;
+}
 
 s32 g_randoHighlightMsg;
 s32 g_randoSilentPickup;
@@ -789,6 +803,7 @@ void randoPatchSetup(s32 stageId)
     s_snapValid = FALSE;
     s_tickCount = 0;
     s_propBase = s_propEnd = NULL;
+    s_dropFollower = NULL;
     s_playStarted = FALSE;
 
     lvl = currentSoloLevel();
@@ -970,6 +985,14 @@ void randoPatchSetup(s32 stageId)
         if (k == s_ntracked)
         {
             continue;   /* found already: it comes in with Bond, nothing to hand over */
+        }
+        if (isScriptDrop(lvl, tg->tag))
+        {
+            /* the tag stays on the script's own object (Statue's "find flight
+             * recorder" objective checks it); the item is dropped along with it */
+            s_dropFollower = s_tracked[k].rec;
+            RANDOLOG("    item #%d drops with the script's tag %d\n", tg->item, tg->tag);
+            continue;
         }
         for (r = 0; r < nrec; r++)
         {
@@ -1250,6 +1273,23 @@ static char *codeProgress(const RandoItem *it)
     return msg;
 }
 
+/* Is item `item` what this level's script hands over (Dr. Doak, Mishkin)? */
+static s32 isHandover(s32 item)
+{
+    s32 i;
+
+    for (i = 0; i < s_seed.ntags; i++)
+    {
+        if (s_seed.tags[i].level == s_level && s_seed.tags[i].item == item)
+        {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void display_text_for_weapon_in_lower_left_corner(ITEM_IDS weaponid);   /* propobj.c */
+
 char *randoOnPickup(ObjectRecord *obj)
 {
     s32 i;
@@ -1288,6 +1328,18 @@ char *randoOnPickup(ObjectRecord *obj)
                     RANDOLOG("    picked up #%d on %s (%s%.2f)\n", s_tracked[i].item, s_levelNames[s_level],
                              obj->type == PROPDEF_ARMOUR ? "armor " : "gun ",
                              obj->type == PROPDEF_ARMOUR ? ((BodyArmourRecord *)obj)->amount : 0.0f);
+                    if (isHandover(s_tracked[i].item))
+                    {
+                        /* the script hands it over without the game's message */
+                        if (obj->type == PROPDEF_ARMOUR)
+                        {
+                            hudmsgBottomShow("Picked up some body armor.");
+                        }
+                        else
+                        {
+                            display_text_for_weapon_in_lower_left_corner(it->weaponnum);
+                        }
+                    }
                 }
                 return NULL;
             }
@@ -1317,6 +1369,20 @@ char *randoOnPickup(ObjectRecord *obj)
                     RANDOLOG("    (GoldenEye Key %s, %d of %d code letters; Cradle %s)\n",
                              hasCradleKey() ? "found" : "not found", lettersFound(), CODE_LETTERS,
                              cradleUnlocked() ? "is now UNLOCKED" : "still locked");
+                }
+                if (isHandover(s_tracked[i].item))
+                {
+                    /* The script's "Bond collects object" picks it up without a
+                     * message, so what Dr. Doak or Mishkin gave went unnoticed
+                     * (a Golden Gun from Doak, 11-01): show it here. */
+                    char *text = (it->kind == KIND_LETTER || (it->kind == KIND_CRADLEKEY && (s_seed.options & OPT_GOAL_CODES)))
+                                 ? codeProgress(it) : it->name;
+
+                    if (text != NULL && text[0] != '\0')
+                    {
+                        hudmsgBottomShow(text);
+                    }
+                    return NULL;
                 }
                 if (it->kind == KIND_LETTER || (it->kind == KIND_CRADLEKEY && (s_seed.options & OPT_GOAL_CODES)))
                 {
@@ -1764,6 +1830,19 @@ s32 randoStageStatus(s32 levelid, s32 difficulty, s32 *status)
         *status = STAGESTATUS_LOCKED;
     }
     return TRUE;
+}
+
+s32 randoQuietObjectives(void)
+{
+    /* the level is loading or play has only just started (about two seconds):
+     * an objective whose item is in another level flips to failed here */
+    s32 quiet = s_level >= 0 && (!s_playStarted || s_tickCount < 120);
+
+    if (s_level >= 0)
+    {
+        RANDOLOG("    an objective failed%s\n", quiet ? " as the level loaded (not announced)" : "");
+    }
+    return quiet;
 }
 
 s32 randoBestTime(s32 levelid)

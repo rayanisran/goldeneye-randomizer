@@ -26,6 +26,7 @@
 #include "player.h"
 #include "propobj.h"
 #include "stan.h"
+#include "rando.h"
 #include <assert.h>
 #include <bondaicommands.h>
 #include <bondgame.h>
@@ -2440,7 +2441,13 @@ void                   ai(PropDefHeaderRecord *Entityp, PROP_TYPE EntityType)
                     volatile PadRecord *pad;
                     u16                 padnum = ntohs(ai->PAD);
                     Mtxf                matrix;
+#ifdef GE_RANDOMIZER
+                    s32                 pass;
 
+                    /* the randomizer's item waiting with the script's object (Statue's
+                     * flight recorder) is dropped with it, on the second pass */
+                    for (pass = 0; pass < 2; pass++, obj = randoScriptDropFollower(ai->OBJECT_TAG))
+#endif
                     if (obj && obj->prop)
                     {
                         if (isNotBoundPad(padnum))

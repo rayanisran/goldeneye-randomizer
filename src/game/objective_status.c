@@ -7,6 +7,7 @@
 #include "PR/os.h"
 #include "str.h"
 #include "bondview.h"
+#include "rando.h"
 #ifdef PORT
 #include <stdlib.h>
 /* set by bossReturnTitleStage so the (per-frame-polled) objective logs only
@@ -378,6 +379,11 @@ void display_objective_status_text_on_status_change(void)
         status = get_status_of_objective(i);
         if (objectiveStatuses[i] != status) {
             objectiveStatuses[i] = status;
+#ifdef GE_RANDOMIZER
+            /* an objective item the randomizer moved to another level reads as
+             * failed the moment the level loads: not worth a message */
+            if (status == OBJECTIVESTATUS_FAILED && randoQuietObjectives()) { } else
+#endif
             if (get_difficulty_for_objective(i) <= lvlGetSelectedDifficulty()) {
                 if (j_text_trigger != 0)
                 {

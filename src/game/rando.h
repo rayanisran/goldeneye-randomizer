@@ -51,6 +51,14 @@ s32  randoStageCompleted(s32 levelid);
 /* file2.c fileIsStageUnlockedAtDifficulty: TRUE = *status was decided. */
 s32  randoStageStatus(s32 levelid, s32 difficulty, s32 *status);
 
+/* chrai.c AI_MoveObject: an object the randomizer placed with the script's
+ * tagged object, to be moved along with it (Statue's flight recorder), or NULL. */
+ObjectRecord *randoScriptDropFollower(s32 tag);
+
+/* objective_status.c display_objective_status_text_on_status_change: TRUE =
+ * don't announce an objective failing (the level is just loading). */
+s32  randoQuietObjectives(void);
+
 /* Best times belong to the seed (a new seed starts with none); the save
  * folder's own times are left alone. front.c mission status: this level's best
  * in seconds, 0 = none yet, -1 = no seed loaded (use the folder's).
