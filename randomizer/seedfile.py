@@ -52,7 +52,8 @@ class Seed:
     glow_items: bool = True             # items still to find pulse gold
     carriers: str = "greyer"            # guards holding one: "greyer" or "same"
     goal_codes: bool = True             # the code letters and the GoldenEye Key open Cradle
-    mirror: bool = False                # each level entry randomly mirrors the level
+    mirror: str = "off"                 # "random": each level entry may be mirrored; "all": always
+    drop_ammo: int = 5                  # rounds in a gun a guard drops (1-255)
     bonus_parent: tuple = (NO_LEVEL, NO_LEVEL)
     start_pads: list = field(default_factory=lambda: [0] * LEVELS)
     items: list = field(default_factory=list)
@@ -69,7 +70,8 @@ class Seed:
                            (1 if self.bonus_levels else 0) | (2 if self.show_handover else 0)
                            | (4 if self.glow_items else 0)
                            | (8 if self.carriers == "greyer" else 0)
-                           | (16 if self.goal_codes else 0) | (32 if self.mirror else 0),
+                           | (16 if self.goal_codes else 0) | (32 if self.mirror == "random" else 0)
+                           | (64 if self.mirror == "all" else 0),
                            self.seed & 0xFFFFFFFF, (self.seed >> 32) & 0xFFFFFFFF, mask,
                            self.bonus_parent[0], self.bonus_parent[1],
                            len(self.items), len(self.loadout), len(self.topups))
@@ -81,4 +83,5 @@ class Seed:
         tail += b"".join(struct.pack("<BBBBH", lv, w, a, 0, n) for lv, w, a, n in self.topups)
         tail += struct.pack("<H", len(self.locks)) + b"".join(struct.pack("<BBH", lv, b, d) for lv, b, d in self.locks)
         tail += struct.pack("<H", len(self.tags)) + b"".join(struct.pack("<BBH", lv, t, i) for lv, t, i in self.tags)
+        tail += struct.pack("<B", self.drop_ammo)
         return head + body + tail

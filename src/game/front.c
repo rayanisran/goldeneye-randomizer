@@ -7281,6 +7281,23 @@ void interface_menu0D_missioncomplete()
                     entry++;
                 }
 
+#ifdef GE_RANDOMIZER
+                {
+                    /* "Next" walks to the following level in the original
+                     * order (Caverns -> Cradle) whether or not the seed has
+                     * opened it: a locked one goes back to mission select. */
+                    s32 randostatus;
+
+                    if (mission_folder_setup_entries[entry].folder_text_preset
+                        && randoStageStatus(mission_folder_setup_entries[entry].mission_num, selected_difficulty, &randostatus)
+                        && randostatus == STAGESTATUS_LOCKED)
+                    {
+                        frontChangeMenu(MENU_MISSION_SELECT, FALSE);
+                        set_cursor_to_stage_solo((s32)mission_folder_setup_entries[briefingpage].mission_num);
+                        return;
+                    }
+                }
+#endif
                 if (mission_folder_setup_entries[entry].folder_text_preset)
                 {
                     briefingpage = entry;

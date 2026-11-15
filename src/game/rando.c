@@ -18,6 +18,7 @@
  *   ..  (optional) u16 n + handovers, 4 bytes each: u8 level, u8 tag, u16 item index
  *       (the level's script gives Bond the object with that tag - Mishkin's safe
  *        key - so the item placed on that guard takes over the tag)
+ *   ..  (optional) u8 rounds in a gun a guard drops (0 or missing: 5)
  *   modes: 0 pad, 1 guard, 2 inside a container, 3 inside a safe (ref = the
  *   safe-link record), 4 handed over when play starts (like Q's gadgets)
  *       (entering `level` while owning `weapon` raises that ammo to `minimum`, so a
@@ -109,6 +110,9 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" 
 #define OPT_GLOW_ITEMS     0x04   /* items still to find pulse gold, seen from afar */
 #define OPT_CARRIER_GREYER 0x08   /* guards holding one are drawn slightly greyer */
 #define OPT_MIRROR         0x20   /* each level entry randomly mirrors the level */
+#define OPT_MIRROR_ALL     0x40   /* every level is always mirrored */
+
+#define DROP_AMMO_DEFAULT  5      /* rounds in a gun a guard drops, when the seed doesn't say */
 #define OPT_GOAL_CODES     0x10   /* the code letters and the GoldenEye Key open Cradle,
                                    * not beating every level */
 
@@ -201,6 +205,7 @@ static struct {
     RandoLock locks[RANDO_MAX_LOCKS];
     s32 ntags;
     RandoTag tags[RANDO_MAX_TAGS];
+    u8  dropAmmo;                       /* rounds in a gun a guard drops */
 } s_seed;
 
 static RandoSave s_save;
@@ -447,7 +452,7 @@ static s32 currentSoloLevel(void)
 static void randoLoad(void)
 {
     static u8 buf[68 + RANDO_MAX_ITEMS * RANDO_ITEM_BYTES + RANDO_MAX_LOADOUT * 4 + RANDO_MAX_TOPUP * 6
-                  + 2 + RANDO_MAX_LOCKS * 4 + 2 + RANDO_MAX_TAGS * 4];
+                  + 2 + RANDO_MAX_LOCKS * 4 + 2 + RANDO_MAX_TAGS * 4 + 4];
     s32 len, i, off;
 
     s_seed.tried = TRUE;
@@ -550,7 +555,17 @@ static void randoLoad(void)
             s_seed.tags[i].item = rd16(buf + off + 2);
             s_seed.ntags++;
         }
+        off += (n - i) * 4;   /* skip any beyond the table */
     }
+
+    /* settings (optional section): u8 rounds in a gun a guard drops. Older
+     * seed files end before it; the N64 reads zeros past the seed. */
+    s_seed.dropAmmo = DROP_AMMO_DEFAULT;
+    if (off + 1 <= len && buf[off] != 0)
+    {
+        s_seed.dropAmmo = buf[off];
+    }
+    off += 1;
 
     if (!randoIoLoadSave(&s_save) || memcmp(s_save.magic, "GERV", 4) != 0
         || (s_save.version != RANDO_SAVE_VERSION && s_save.version != 3)
@@ -615,6 +630,8 @@ static void randoLoad(void)
         RANDOLOG("=== seed %08x%08x loaded (%s, %d items). Items found %d/%d. Beaten: %s Unlocked: %s\n",
                  s_seed.seedhi, s_seed.seedlo, s_diffNames[s_seed.difficulty & 3], nplaced,
                  nfound, nplaced, done[0] ? done : "none. ", open[0] ? open : "none");
+        RANDOLOG("    guards' dropped guns hold %d rounds; mirror mode %s\n", s_seed.dropAmmo,
+                 (s_seed.options & OPT_MIRROR_ALL) ? "every level" : (s_seed.options & OPT_MIRROR) ? "random" : "off");
     }
 }
 
@@ -793,9 +810,9 @@ static void shortName(char *out, const char *pickup)
     out[n + 1] = '\0';
 }
 
-/* Decided afresh on every entry into a level, retries included: not part of
- * the seed, so nothing about it can be learned from an earlier visit.
- * GE_RANDO_MIRROR=0/1 forces it (tests). */
+/* "Every level": always mirrored. "Random": decided afresh on every entry into
+ * a level, retries included: not part of the seed, so nothing about it can be
+ * learned from an earlier visit. GE_RANDO_MIRROR=0/1 forces it (tests). */
 static s32 rollMirror(void)
 {
 #ifdef PORT
@@ -805,6 +822,10 @@ static s32 rollMirror(void)
     if (force)
     {
         return force[0] == '1';
+    }
+    if (s_seed.options & OPT_MIRROR_ALL)
+    {
+        return TRUE;
     }
     if (!(s_seed.options & OPT_MIRROR))
     {
@@ -1056,7 +1077,7 @@ void randoPatchSetup(s32 stageId)
         RANDOLOG("--> Enter %s (%s). Items hidden here: %s. Carried in and handed over: %s. [%d records, %d bytes added]\n",
                  s_levelNames[lvl], s_diffNames[lvlGetSelectedDifficulty() & 3], hidden[0] ? hidden : "none",
                  handed[0] ? handed : "none", nrec, extra);
-        if (s_seed.options & OPT_MIRROR)
+        if (s_seed.options & (OPT_MIRROR | OPT_MIRROR_ALL))
         {
             RANDOLOG("    mirror mode: %s this time\n", s_mirror ? "MIRRORED" : "normal");
         }
@@ -1725,7 +1746,7 @@ s32 randoGuardDropAmmo(WeaponObjRecord *weapon, s32 qty)
      * pickup. Guard-carried guns keep PROPFLAG_ASSIGNEDTOCHR after they drop,
      * and guns scripts spawn on guards are allocated outside the records. */
     onfloor = p >= s_propBase && p < s_propEnd && !(weapon->flags & PROPFLAG_ASSIGNEDTOCHR);
-    return onfloor ? qty : 5;
+    return onfloor ? qty : s_seed.dropAmmo;
 }
 
 /* ------------------------------------------------------------ easy to spot */

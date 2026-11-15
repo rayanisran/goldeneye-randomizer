@@ -34,12 +34,15 @@ from .rng import SeedRNG
 CARRIERS = ("greyer", "same")    # race-code order: index 0 is the default
 CARRIER_LABELS = {"greyer": "Slightly greyer", "same": "Look the same"}
 PLACEMENTS = ("anywhere", "original")   # race-code bit 11
-PLACEMENT_LABELS = {"anywhere": "Anywhere (hiding spots, any soldier)",
-                    "original": "Original locations only"}
+PLACEMENT_LABELS = {"anywhere": "Anywhere", "original": "Original locations only"}
+MIRRORS = ("off", "random", "all")      # race-code bits 13-14 (1 = "random", the old mirror bit)
+MIRROR_LABELS = {"off": "Off", "all": "Every level", "random": "Random each time you enter a level"}
+DROP_AMMO = 5                  # default rounds in a gun a guard drops (race-code bits 15-19)
+DROP_AMMO_RANGE = range(1, 31)
 GOALS = ("codes", "all")                 # race-code bit 12
 GOAL_LABELS = {"codes": f"Satellite codes ({CODE_WORD} + GoldenEye Key opens Cradle)",
                "all": "Beat every level (+ GoldenEye Key opens Cradle)"}
-LOGIC_VERSION = 11             # bump whenever generation can change for the same code
+LOGIC_VERSION = 12            # bump whenever generation can change for the same code
 DIFFS = ("agent", "secret", "00agent")
 DIFF_CHARS = "ASO"
 ORIGINAL_SAME_LEVEL_WEIGHT = 0.04   # the same target there: few spots per level, so lower
@@ -75,15 +78,18 @@ class Settings:
     carriers: str = "greyer"        # guards holding one: drawn slightly "greyer", or the "same"
     placement: str = "anywhere"     # "original": items only where the original game has one
     goal: str = "codes"             # "codes": the code letters and the GoldenEye Key open Cradle
-    mirror: bool = False            # each level entry randomly mirrors the level (rolled in the game)
+    mirror: str = "off"             # "all": every level mirrored; "random": rolled in the game on each entry
+    drop_ammo: int = DROP_AMMO      # rounds in a gun a guard drops (the same on every difficulty)
 
     def flags(self):
-        # glow stored inverted and carriers as an index with "greyer" = 0, so
-        # codes from before these settings read as the defaults
+        # glow stored inverted, carriers as an index with "greyer" = 0 and drop
+        # ammo as an offset from 5, so codes from before these settings read as
+        # the defaults
         return (1 if self.bonus else 0) | (logic.TIERS.index(self.tier) << 1) | \
                (8 if self.containers else 0) | (16 if self.show_handover else 0) | (self.new_locks << 5) | \
                (0 if self.glow_items else 512) | (CARRIERS.index(self.carriers) << 10) | \
-               (PLACEMENTS.index(self.placement) << 11) | (GOALS.index(self.goal) << 12) | (8192 if self.mirror else 0)
+               (PLACEMENTS.index(self.placement) << 11) | (GOALS.index(self.goal) << 12) | \
+               (MIRRORS.index(self.mirror) << 13) | (((self.drop_ammo - DROP_AMMO) % 32) << 15)
 
 
 # ------------------------------------------------------------------ race codes
@@ -115,11 +121,14 @@ def parse_race_code(code, world):
         raise ValueError(f"this code is for randomizer version {tag}, this copy is {version_tag(world).upper()}: "
                          "both racers need the same version")
     d, flags = parts[2][0], int(parts[2][1:] or "0", 16)
+    drop_ammo = ((flags >> 15) + DROP_AMMO) % 32
+    if flags >> 20 or (flags >> 13) & 3 >= len(MIRRORS) or drop_ammo not in DROP_AMMO_RANGE:
+        raise ValueError("this code has settings this copy doesn't know: both racers need the same version")
     settings = Settings(difficulty=DIFFS[DIFF_CHARS.index(d)], bonus=bool(flags & 1),
                         tier=logic.TIERS[(flags >> 1) & 3], containers=bool(flags & 8),
                         show_handover=bool(flags & 16), new_locks=(flags >> 5) & 15,
                         glow_items=not flags & 512, carriers=CARRIERS[(flags >> 10) & 1], placement=PLACEMENTS[(flags >> 11) & 1],
-                        goal=GOALS[(flags >> 12) & 1], mirror=bool(flags & 8192))
+                        goal=GOALS[(flags >> 12) & 1], mirror=MIRRORS[(flags >> 13) & 3], drop_ammo=drop_ammo)
     return int(parts[3], 36), settings
 
 
@@ -648,6 +657,7 @@ def to_seedfile(res):
 
     seed = seedfile.Seed(seed=run_id(res["code"]), difficulty=DIFFS.index(settings.difficulty),
                          bonus_levels=settings.bonus, show_handover=settings.show_handover, mirror=settings.mirror,
+                         drop_ammo=settings.drop_ammo,
                          glow_items=settings.glow_items, carriers=settings.carriers,
                          goal_codes=settings.goal == "codes",
                          start_levels=[SP[k] for k in res["start"]],
@@ -711,7 +721,8 @@ def describe(settings):
             f"logic {settings.tier}, "
             f"crates/barrels {'on' if settings.containers else 'off'}, "
             f"announce carried items {'on' if settings.show_handover else 'off'}, "
-            f"mirror mode {'on' if settings.mirror else 'off'}, "
+            f"mirror mode: {MIRROR_LABELS[settings.mirror].lower()}, "
+            f"{settings.drop_ammo} rounds in guards' dropped guns, "
             f"new locks {settings.new_locks}, "
             f"glowing items {'on' if settings.glow_items else 'off'}, "
             f"guards carrying items: {CARRIER_LABELS[settings.carriers].lower()}, "
@@ -771,8 +782,10 @@ def main(argv=None):
     ap.add_argument("--logic", choices=logic.TIERS, default="normal",
                     help="easy: no tricks required; normal: known tricks may be required; advanced: + glitches")
     ap.add_argument("--containers", action="store_true", help="also hide items inside crates and barrels")
-    ap.add_argument("--mirror", action="store_true",
-                    help="each time a level is entered, randomly mirror it or not (PC build)")
+    ap.add_argument("--mirror", choices=MIRRORS, default="off",
+                    help="all: every level mirrored; random: each time a level is entered, mirrored or not (PC build)")
+    ap.add_argument("--drop-ammo", type=int, default=DROP_AMMO, choices=DROP_AMMO_RANGE, metavar="1-30",
+                    help=f"rounds in a gun a guard drops (default {DROP_AMMO}, the same on every difficulty)")
     ap.add_argument("--show-handover", action="store_true",
                     help="announce carried items when a level starts (off: it hints where they're used)")
     ap.add_argument("--new-locks", type=int, default=0, choices=range(0, 11), metavar="0-10",
@@ -794,7 +807,8 @@ def main(argv=None):
         seed = args.seed if args.seed is not None else new_seed()
         settings = Settings(args.difficulty, not args.no_bonus, args.logic, args.containers, args.show_handover,
                             args.new_locks, not args.no_glow, args.carriers,
-                            "original" if args.original_locations else "anywhere", args.goal, args.mirror)
+                            "original" if args.original_locations else "anywhere", args.goal, args.mirror,
+                            args.drop_ammo)
     res = generate(seed, settings, world)
     _, words = write(res, args.out)
     print(f"race code {res['code']}  check words: {words}\n"

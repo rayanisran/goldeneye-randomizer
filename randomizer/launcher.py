@@ -19,9 +19,12 @@ from . import levels, n64rom, world as worlddata, wsplit
 
 APP_TITLE = "GoldenEye Randomizer"
 DIFF_LABELS = {"agent": "Agent", "secret": "Secret Agent", "00agent": "00 Agent"}
-TIER_LABELS = {"easy": "Easy", "normal": "Normal", "advanced": "Advanced"}
-TIER_HELP = ("Easy: no tricks needed.  Normal: known tricks may be needed (keycard skips, guards\n"
-             "opening doors, the Bunker 2 cell warp...).  Advanced: Normal plus glitches.")
+TIERS = [("easy", "Easy", "no tricks needed"),
+         ("normal", "Normal", "known tricks may be needed (keycard skips, cell warp...)"),
+         ("advanced", "Advanced", "Normal plus glitches")]
+GOAL_CHOICES = {"codes": f"Find the {gen.CODE_WORD} code letters", "all": "Beat every level"}
+NOTE = "#555"
+WRAP = 720   # pixels: the current-seed summary wraps here instead of widening the window
 
 
 def game_root():
@@ -84,7 +87,8 @@ class Launcher(tk.Tk):
         self.tier = tk.StringVar(value="normal")
         self.containers = tk.BooleanVar(value=False)
         self.handover = tk.BooleanVar(value=False)
-        self.mirror = tk.BooleanVar(value=False)
+        self.mirror = tk.StringVar(value="off")
+        self.drop_ammo = tk.IntVar(value=gen.DROP_AMMO)
         self.new_locks = tk.IntVar(value=0)
         self.glow_items = tk.BooleanVar(value=True)
         self.carriers = tk.StringVar(value="greyer")
@@ -94,88 +98,128 @@ class Launcher(tk.Tk):
         self.race_text = tk.StringVar()
         self.status = tk.StringVar()
 
-        pad = dict(padx=10, pady=4)
-        box = ttk.LabelFrame(self, text="New seed")
-        box.grid(row=0, column=0, sticky="nsew", **pad)
-        ttk.Label(box, text="Difficulty").grid(row=0, column=0, sticky="w", padx=8)
-        for i, (key, label) in enumerate(DIFF_LABELS.items()):
-            ttk.Radiobutton(box, text=label, value=key, variable=self.diff).grid(row=0, column=1 + i, sticky="w")
-        ttk.Label(box, text="Logic").grid(row=1, column=0, sticky="w", padx=8)
-        for i, (key, label) in enumerate(TIER_LABELS.items()):
-            ttk.Radiobutton(box, text=label, value=key, variable=self.tier).grid(row=1, column=1 + i, sticky="w")
-        ttk.Label(box, text=TIER_HELP, foreground="#555").grid(row=2, column=0, columnspan=4, sticky="w", padx=8)
-        checks = [
-            (self.bonus, "Include Aztec and Egyptian"),
-            (self.containers, "Hide items inside crates and barrels"),
-            (self.handover, "Announce carried items when a level starts (hints where they're used)"),
-            (self.glow_items, "Small items still to find glow gold (keys, keycards, mines...)"),
-            (self.mirror, "Mirror mode: each time you enter a level, it may be flipped left to right (PC only)"),
-        ]
-        for r, (var, text) in enumerate(checks, start=4):
-            ttk.Checkbutton(box, text=text, variable=var).grid(row=r, column=0, columnspan=4, sticky="w", padx=8)
-        ttk.Label(box, text="Item locations").grid(row=3, column=0, sticky="w", padx=8)
-        for i, key in enumerate(gen.PLACEMENTS):
-            ttk.Radiobutton(box, text=gen.PLACEMENT_LABELS[key], value=key, variable=self.placement).grid(
-                row=3, column=1 + 2 * i, columnspan=2, sticky="w")
-        ttk.Label(box, text="Guards carrying an item").grid(row=9, column=0, sticky="w", padx=8)
-        for i, key in enumerate(gen.CARRIERS):
-            ttk.Radiobutton(box, text=gen.CARRIER_LABELS[key], value=key, variable=self.carriers).grid(
-                row=9, column=1 + i, sticky="w")
-        ttk.Label(box, text="New locks").grid(row=10, column=0, sticky="w", padx=8)
-        ttk.Spinbox(box, from_=0, to=10, textvariable=self.new_locks, width=4, state="readonly").grid(
-            row=10, column=1, sticky="w")
-        ttk.Label(box, text="doors that are normally open get locked; each new key is named for its level",
-                  foreground="#555").grid(row=10, column=2, columnspan=2, sticky="w")
-        ttk.Label(box, text="Goal").grid(row=11, column=0, sticky="nw", padx=8)
-        for i, key in enumerate(gen.GOALS):
-            ttk.Radiobutton(box, text=gen.GOAL_LABELS[key], value=key, variable=self.goal).grid(
-                row=11 + i, column=1, columnspan=3, sticky="w")
-        ttk.Label(box, text="Seed (blank = random)").grid(row=13, column=0, sticky="w", padx=8, pady=(6, 2))
-        ttk.Entry(box, textvariable=self.seed_text, width=22).grid(row=13, column=1, columnspan=2, sticky="w", pady=(6, 2))
-        ttk.Button(box, text="Generate", command=self.generate_new).grid(row=13, column=3, sticky="e", padx=8, pady=(6, 6))
-
-        race = ttk.LabelFrame(self, text="Race: paste the code your opponent sends you")
-        race.grid(row=1, column=0, sticky="nsew", **pad)
-        ttk.Entry(race, textvariable=self.race_text, width=40).grid(row=0, column=0, padx=8, pady=6)
-        ttk.Button(race, text="Load race seed", command=self.generate_race).grid(row=0, column=1, padx=8)
+        self.columnconfigure(0, weight=1)
+        self.build_settings().grid(row=0, column=0, sticky="nsew", padx=8, pady=(6, 2))
 
         cur = ttk.LabelFrame(self, text="Current seed")
-        cur.grid(row=2, column=0, sticky="nsew", **pad)
-        ttk.Label(cur, textvariable=self.status, justify="left").grid(row=0, column=0, columnspan=4, sticky="w", padx=8, pady=4)
-        ttk.Button(cur, text="Copy race code", command=self.copy_code).grid(row=1, column=0, sticky="w", padx=8, pady=6)
-        ttk.Button(cur, text="Spoiler log...", command=self.open_spoiler).grid(row=1, column=1, sticky="w", pady=6)
-        ttk.Button(cur, text="N64 ROM...", command=self.make_n64_rom).grid(row=1, column=2, sticky="w", pady=6)
-        ttk.Button(cur, text="PLAY", command=self.play).grid(row=1, column=3, sticky="e", padx=8, pady=6)
+        cur.grid(row=2, column=0, sticky="nsew", padx=8, pady=2)
+        cur.columnconfigure(3, weight=1)
+        ttk.Label(cur, textvariable=self.status, justify="left", wraplength=WRAP).grid(
+            row=0, column=0, columnspan=6, sticky="w", padx=8, pady=(2, 4))
+        ttk.Button(cur, text="Copy race code", command=self.copy_code).grid(row=1, column=0, sticky="w", padx=(8, 4), pady=(0, 6))
+        ttk.Button(cur, text="Spoiler log...", command=self.open_spoiler).grid(row=1, column=1, sticky="w", padx=(0, 4), pady=(0, 6))
+        ttk.Button(cur, text="N64 ROM...", command=self.make_n64_rom).grid(row=1, column=2, sticky="w", pady=(0, 6))
+        ttk.Button(cur, text="PLAY", command=self.play).grid(row=1, column=5, sticky="e", padx=8, pady=(0, 6))
 
         note = ("Each level opens when you find its clearance, or when you beat the level before it.\n"
-                "Good to know: the covert modem (Dam) and the tracking bug (Frigate) are the same item, so either\n"
-                "one works for both levels. The camera is shared by Bunker 1 and Silo the same way.")
-        ttk.Label(self, text=note, foreground="#555").grid(row=4, column=0, sticky="w", padx=12, pady=(0, 10))
+                "The covert modem (Dam) and the tracking bug (Frigate) are the same item: either one works for both levels.\n"
+                "The camera works for both Bunker 1 and Silo the same way.")
+        ttk.Label(self, text=note, foreground=NOTE).grid(row=4, column=0, sticky="w", padx=12, pady=(2, 8))
 
         self.game = None
         self.timer = wsplit.Timer()
         if wsplit.supported():
-            self.build_timer_box(pad)
+            self.build_timer_box()
         self.refresh()
 
-    def build_timer_box(self, pad):
+    def build_settings(self):
+        """New-seed settings in two columns of group boxes, seed entry below."""
+        outer = ttk.LabelFrame(self, text="New seed")
+        left, right = ttk.Frame(outer), ttk.Frame(outer)
+        left.grid(row=0, column=0, sticky="nsew", padx=(6, 3))
+        right.grid(row=0, column=1, sticky="nsew", padx=(3, 6))
+        gap = dict(sticky="nsew", pady=(0, 4))
+
+        box = ttk.LabelFrame(left, text="Difficulty")
+        box.grid(row=0, column=0, **gap)
+        for i, (key, label) in enumerate(DIFF_LABELS.items()):
+            ttk.Radiobutton(box, text=label, value=key, variable=self.diff).grid(row=0, column=i, sticky="w", padx=(8, 4), pady=2)
+
+        box = ttk.LabelFrame(left, text="Logic")
+        box.grid(row=1, column=0, **gap)
+        for r, (key, label, help_text) in enumerate(TIERS):
+            ttk.Radiobutton(box, text=label, value=key, variable=self.tier).grid(row=r, column=0, sticky="w", padx=8)
+            ttk.Label(box, text=help_text, foreground=NOTE).grid(row=r, column=1, sticky="w", padx=(0, 8))
+
+        box = ttk.LabelFrame(left, text="Items")
+        box.grid(row=2, column=0, **gap)
+        ttk.Label(box, text="Item locations").grid(row=0, column=0, sticky="w", padx=8)
+        for i, key in enumerate(gen.PLACEMENTS):
+            ttk.Radiobutton(box, text=gen.PLACEMENT_LABELS[key], value=key, variable=self.placement).grid(
+                row=0, column=1 + i, sticky="w", padx=(0, 8))
+        ttk.Checkbutton(box, text="Hide items inside crates and barrels (boxsanity)", variable=self.containers).grid(
+            row=1, column=0, columnspan=3, sticky="w", padx=8)
+        ttk.Label(box, text="Rounds in a gun a guard drops").grid(row=2, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 4))
+        ttk.Spinbox(box, from_=gen.DROP_AMMO_RANGE.start, to=gen.DROP_AMMO_RANGE.stop - 1, textvariable=self.drop_ammo,
+                    width=4, state="readonly").grid(row=2, column=2, sticky="w", pady=(0, 4))
+
+        box = ttk.LabelFrame(right, text="Goal and locks")
+        box.grid(row=0, column=0, **gap)
+        for r, key in enumerate(gen.GOALS):
+            ttk.Radiobutton(box, text=GOAL_CHOICES[key], value=key, variable=self.goal).grid(
+                row=r, column=0, columnspan=2, sticky="w", padx=8)
+        ttk.Label(box, text="Either way, Cradle also needs the GoldenEye Key.", foreground=NOTE).grid(
+            row=2, column=0, columnspan=2, sticky="w", padx=8)
+        ttk.Checkbutton(box, text="Include Aztec and Egyptian", variable=self.bonus).grid(
+            row=3, column=0, columnspan=2, sticky="w", padx=8)
+        ttk.Label(box, text="New locks on normally open doors").grid(row=4, column=0, sticky="w", padx=8, pady=(0, 4))
+        ttk.Spinbox(box, from_=0, to=10, textvariable=self.new_locks, width=4, state="readonly").grid(
+            row=4, column=1, sticky="w", padx=(0, 8), pady=(0, 4))
+
+        box = ttk.LabelFrame(right, text="Mirror mode (PC only)")
+        box.grid(row=1, column=0, **gap)
+        for i, key in enumerate(("off", "all", "random")):
+            ttk.Radiobutton(box, text=gen.MIRROR_LABELS[key], value=key, variable=self.mirror).grid(
+                row=0, column=i, sticky="w", padx=(8, 0), pady=2)
+
+        box = ttk.LabelFrame(right, text="Display")
+        box.grid(row=2, column=0, **gap)
+        ttk.Checkbutton(box, text="Keys and gadgets glow gold until you pick them up", variable=self.glow_items).grid(
+            row=0, column=0, columnspan=3, sticky="w", padx=8)
+        ttk.Checkbutton(box, text="Announce carried items when a level starts", variable=self.handover).grid(
+            row=1, column=0, columnspan=3, sticky="w", padx=8)
+        ttk.Label(box, text="Guards carrying an item").grid(row=2, column=0, sticky="w", padx=8, pady=(0, 4))
+        for i, key in enumerate(gen.CARRIERS):
+            ttk.Radiobutton(box, text=gen.CARRIER_LABELS[key], value=key, variable=self.carriers).grid(
+                row=2, column=1 + i, sticky="w", padx=(0, 8), pady=(0, 4))
+
+        for col in (left, right):
+            col.columnconfigure(0, weight=1)
+        seed = ttk.Frame(outer)
+        seed.grid(row=1, column=0, sticky="ew", padx=(6, 3), pady=(2, 6))
+        ttk.Label(seed, text="Seed (blank = random)").grid(row=0, column=0, sticky="w", padx=(2, 6))
+        ttk.Entry(seed, textvariable=self.seed_text, width=16).grid(row=0, column=1, sticky="ew")
+        seed.columnconfigure(1, weight=1)
+        ttk.Button(seed, text="Generate", command=self.generate_new).grid(row=0, column=2, sticky="e", padx=(6, 0))
+        race = ttk.Frame(outer)
+        race.grid(row=1, column=1, sticky="ew", padx=(3, 6), pady=(2, 6))
+        ttk.Label(race, text="Race code").grid(row=0, column=0, sticky="w", padx=(2, 6))
+        ttk.Entry(race, textvariable=self.race_text, width=16).grid(row=0, column=1, sticky="ew")
+        race.columnconfigure(1, weight=1)
+        ttk.Button(race, text="Load race seed", command=self.generate_race).grid(row=0, column=2, sticky="e", padx=(6, 0))
+        return outer
+
+    def build_timer_box(self):
         s = wsplit.load_settings(self.rando)
         self.timer_open = tk.BooleanVar(value=s["open"])
         self.timer_start = tk.BooleanVar(value=s["start"])
         self.timer_path = tk.StringVar(value=s["path"])
         self.timer_note = tk.StringVar()
         box = ttk.LabelFrame(self, text="Timer")
-        box.grid(row=3, column=0, sticky="nsew", **pad)
-        ttk.Checkbutton(box, text="Open WSplit when you press PLAY", variable=self.timer_open).grid(
-            row=0, column=0, columnspan=3, sticky="w", padx=8)
+        box.grid(row=3, column=0, sticky="nsew", padx=8, pady=2)
+        box.columnconfigure(1, weight=1)
+        checks = ttk.Frame(box)
+        checks.grid(row=0, column=0, columnspan=3, sticky="w", padx=8)
+        ttk.Checkbutton(checks, text="Open WSplit when you press PLAY", variable=self.timer_open).grid(
+            row=0, column=0, sticky="w", padx=(0, 12))
         self.timer_start_check = ttk.Checkbutton(
-            box, text="Start the timer when the game opens, and pause it when the game closes",
-            variable=self.timer_start)
-        self.timer_start_check.grid(row=1, column=0, columnspan=3, sticky="w", padx=8)
-        ttk.Label(box, text="WSplit location").grid(row=2, column=0, sticky="w", padx=8, pady=(4, 0))
-        ttk.Entry(box, textvariable=self.timer_path, width=58).grid(row=2, column=1, sticky="w", pady=(4, 0))
-        ttk.Button(box, text="Browse...", command=self.browse_timer).grid(row=2, column=2, sticky="e", padx=8, pady=(4, 0))
-        ttk.Label(box, textvariable=self.timer_note, foreground="#555").grid(row=3, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
+            checks, text="Start the timer with the game, pause it when the game closes", variable=self.timer_start)
+        self.timer_start_check.grid(row=0, column=1, sticky="w")
+        ttk.Label(box, text="WSplit location").grid(row=1, column=0, sticky="w", padx=8, pady=(2, 4))
+        ttk.Entry(box, textvariable=self.timer_path).grid(row=1, column=1, sticky="ew", pady=(2, 4))
+        ttk.Button(box, text="Browse...", command=self.browse_timer).grid(row=1, column=2, sticky="e", padx=8, pady=(2, 4))
+        self.timer_note_label = ttk.Label(box, textvariable=self.timer_note, foreground=NOTE)
+        self.timer_note_label.grid(row=2, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
         for var in (self.timer_open, self.timer_start, self.timer_path):
             var.trace_add("write", lambda *_: self.timer_changed())
         self.show_timer_state()
@@ -185,6 +229,10 @@ class Launcher(tk.Tk):
         self.timer_start_check.config(state="normal" if on else "disabled")
         missing = on and not Path(self.timer_path.get()).is_file()
         self.timer_note.set("WSplit isn't at this location, so PLAY will start the game without it." if missing else "")
+        if missing:
+            self.timer_note_label.grid()
+        else:
+            self.timer_note_label.grid_remove()   # no empty row when there's nothing to say
 
     def timer_changed(self):
         self.show_timer_state()
@@ -204,7 +252,8 @@ class Launcher(tk.Tk):
     def settings(self):
         return gen.Settings(self.diff.get(), self.bonus.get(), self.tier.get(),
                             self.containers.get(), self.handover.get(), int(self.new_locks.get()),
-                            self.glow_items.get(), self.carriers.get(), self.placement.get(), self.goal.get(), self.mirror.get())
+                            self.glow_items.get(), self.carriers.get(), self.placement.get(), self.goal.get(), self.mirror.get(),
+                            int(self.drop_ammo.get()))
 
     def run(self, seed, settings):
         if (self.rando / "seed.bin").exists() and not messagebox.askyesno(
