@@ -22,7 +22,7 @@ DIFF_LABELS = {"agent": "Agent", "secret": "Secret Agent", "00agent": "00 Agent"
 TIERS = [("easy", "Easy", "no tricks needed"),
          ("normal", "Normal", "known tricks may be needed (keycard skips, cell warp...)"),
          ("advanced", "Advanced", "Normal plus glitches")]
-GOAL_CHOICES = {"codes": f"Find the {gen.CODE_WORD} code letters", "all": "Beat every level"}
+GOAL_CHOICES = {"codes": f"Find the {gen.CODE_WORD} code letter keycards", "all": "Beat every level"}
 NOTE = "#555"
 WRAP = 720   # pixels: the current-seed summary wraps here instead of widening the window
 
@@ -108,7 +108,7 @@ class Launcher(tk.Tk):
             row=0, column=0, columnspan=6, sticky="w", padx=8, pady=(2, 4))
         ttk.Button(cur, text="Copy race code", command=self.copy_code).grid(row=1, column=0, sticky="w", padx=(8, 4), pady=(0, 6))
         ttk.Button(cur, text="Spoiler log...", command=self.open_spoiler).grid(row=1, column=1, sticky="w", padx=(0, 4), pady=(0, 6))
-        ttk.Button(cur, text="N64 ROM...", command=self.make_n64_rom).grid(row=1, column=2, sticky="w", pady=(0, 6))
+        ttk.Button(cur, text="Load N64 ROM", command=self.make_n64_rom).grid(row=1, column=2, sticky="w", pady=(0, 6))
         ttk.Button(cur, text="PLAY", command=self.play).grid(row=1, column=5, sticky="e", padx=8, pady=(0, 6))
 
         note = ("Each level opens when you find its clearance, or when you beat the level before it.\n"
@@ -149,17 +149,16 @@ class Launcher(tk.Tk):
                 row=0, column=1 + i, sticky="w", padx=(0, 8))
         ttk.Checkbutton(box, text="Hide items inside crates and barrels (boxsanity)", variable=self.containers).grid(
             row=1, column=0, columnspan=3, sticky="w", padx=8)
-        ttk.Label(box, text="Rounds in a gun a guard drops").grid(row=2, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 4))
+        ttk.Label(box, text="Ammo in dropped guns").grid(row=2, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 4))
+        digits = (self.register(lambda s: s == "" or (s.isdigit() and len(s) <= 2)), "%P")
         ttk.Spinbox(box, from_=gen.DROP_AMMO_RANGE.start, to=gen.DROP_AMMO_RANGE.stop - 1, textvariable=self.drop_ammo,
-                    width=4, state="readonly").grid(row=2, column=2, sticky="w", pady=(0, 4))
+                    width=4, validate="key", validatecommand=digits).grid(row=2, column=2, sticky="w", pady=(0, 4))
 
         box = ttk.LabelFrame(right, text="Goal and locks")
         box.grid(row=0, column=0, **gap)
         for r, key in enumerate(gen.GOALS):
             ttk.Radiobutton(box, text=GOAL_CHOICES[key], value=key, variable=self.goal).grid(
                 row=r, column=0, columnspan=2, sticky="w", padx=8)
-        ttk.Label(box, text="Either way, Cradle also needs the GoldenEye Key.", foreground=NOTE).grid(
-            row=2, column=0, columnspan=2, sticky="w", padx=8)
         ttk.Checkbutton(box, text="Include Aztec and Egyptian", variable=self.bonus).grid(
             row=3, column=0, columnspan=2, sticky="w", padx=8)
         ttk.Label(box, text="New locks on normally open doors").grid(row=4, column=0, sticky="w", padx=8, pady=(0, 4))
@@ -168,7 +167,7 @@ class Launcher(tk.Tk):
 
         box = ttk.LabelFrame(right, text="Mirror mode (PC only)")
         box.grid(row=1, column=0, **gap)
-        for i, key in enumerate(("off", "all", "random")):
+        for i, key in enumerate(gen.MIRRORS):
             ttk.Radiobutton(box, text=gen.MIRROR_LABELS[key], value=key, variable=self.mirror).grid(
                 row=0, column=i, sticky="w", padx=(8, 0), pady=2)
 
@@ -253,7 +252,17 @@ class Launcher(tk.Tk):
         return gen.Settings(self.diff.get(), self.bonus.get(), self.tier.get(),
                             self.containers.get(), self.handover.get(), int(self.new_locks.get()),
                             self.glow_items.get(), self.carriers.get(), self.placement.get(), self.goal.get(), self.mirror.get(),
-                            int(self.drop_ammo.get()))
+                            self.ammo_drop())
+
+    def ammo_drop(self):
+        """The typed ammo amount, kept within the range the game takes."""
+        try:
+            n = int(self.drop_ammo.get())
+        except (tk.TclError, ValueError):
+            n = gen.DROP_AMMO
+        n = min(max(n, gen.DROP_AMMO_RANGE.start), gen.DROP_AMMO_RANGE.stop - 1)
+        self.drop_ammo.set(n)
+        return n
 
     def run(self, seed, settings):
         if (self.rando / "seed.bin").exists() and not messagebox.askyesno(
@@ -371,6 +380,7 @@ class Launcher(tk.Tk):
         messagebox.showinfo(APP_TITLE, f"Saved {out}\n\nExperimental, not yet tested on a real N64. It needs an "
                                        "Expansion Pak, and the save type set to EEPROM 16K (EverDrive OS 3.x "
                                        "picks that up from the ROM). Items don't glow on the N64.")
+
 
     def play(self):
         exe = find_exe(self.root)

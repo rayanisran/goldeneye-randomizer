@@ -128,9 +128,6 @@ POOL = [
     # Egyptian
     Item("golden_gun", "the Golden Gun", "egyptian", Rec("Collectable", item="ITEM_GOLDENGUN"),
          weapon="ITEM_GOLDENGUN"),
-    # Cradle
-    Item("goldeneye_key", "the GoldenEye Key", None, weapon="ITEM_GOLDENEYEKEY", model="PROP_CHRGOLDENEYEKEY",
-         cradle_key=True),
 
     # Weapons and packs: placed anywhere, never required
     Item("control_remote_mines", "8 remote mines", "control", Rec("AmmoBox", model="PROP_AMMO_CRATE3"),
@@ -151,10 +148,10 @@ POOL = [
 POOL += [Item(f"clear_{lv.key}", f"the {lv.name} clearance", lv.key, model="PROP_CHRPLANS", clearance=lv.key)
          for lv in levels.ALL if lv.key != "cradle"]
 
-# The code word: with the satellite-code goal, all its letters and the
-# GoldenEye Key open Cradle. Trevelyan's syndicate.
+# The code word: with the satellite-code goal, all its letter keycards open
+# Cradle. Trevelyan's syndicate.
 CODE_WORD = "JANUS"
-POOL += [Item(f"letter_{c.lower()}", f"code letter {c}", None, model="PROP_CHRMICROFILM", letter=n)
+POOL += [Item(f"letter_{c.lower()}", f"code letter keycard {c}", None, model="PROP_SWIPE_CARD2", letter=n)
          for n, c in enumerate(CODE_WORD)]
 
 BY_KEY = {it.key: it for it in POOL}

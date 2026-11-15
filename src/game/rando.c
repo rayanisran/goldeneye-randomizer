@@ -109,12 +109,13 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" 
 #define OPT_SHOW_HANDOVER  0x02   /* announce items handed over at level start */
 #define OPT_GLOW_ITEMS     0x04   /* items still to find pulse gold, seen from afar */
 #define OPT_CARRIER_GREYER 0x08   /* guards holding one are drawn slightly greyer */
-#define OPT_MIRROR         0x20   /* each level entry randomly mirrors the level */
-#define OPT_MIRROR_ALL     0x40   /* every level is always mirrored */
+#define OPT_MIRROR         0x20   /* (older seeds) each level entry randomly mirrors the level */
+#define OPT_MIRROR_ALL     0x40   /* (older seeds) every level is always mirrored */
+#define OPT_MIRROR_SET     0x80   /* the levels in mirrorMask are always mirrored */
 
 #define DROP_AMMO_DEFAULT  5      /* rounds in a gun a guard drops, when the seed doesn't say */
-#define OPT_GOAL_CODES     0x10   /* the code letters and the GoldenEye Key open Cradle,
-                                   * not beating every level */
+#define OPT_GOAL_CODES     0x10   /* the code letter keycards open Cradle, not beating
+                                   * every level (older seeds: plus the GoldenEye Key) */
 
 /* placement modes */
 #define MODE_PAD     0
@@ -206,6 +207,7 @@ static struct {
     s32 ntags;
     RandoTag tags[RANDO_MAX_TAGS];
     u8  dropAmmo;                       /* rounds in a gun a guard drops */
+    u32 mirrorMask;                     /* OPT_MIRROR_SET: SP levels always mirrored */
 } s_seed;
 
 static RandoSave s_save;
@@ -355,18 +357,23 @@ static s32 levelEnabled(s32 lvl)
     return lvl >= SP_LEVEL_DAM && lvl < SP_LEVEL_AZTEC;
 }
 
+/* Only older seeds have a GoldenEye Key; without one Cradle needs no key. */
 static s32 hasCradleKey(void)
 {
-    s32 i;
+    s32 i, any = FALSE;
 
     for (i = 0; i < s_seed.nitems; i++)
     {
-        if (s_seed.items[i].kind == KIND_CRADLEKEY && itemFound(i))
+        if (s_seed.items[i].kind == KIND_CRADLEKEY)
         {
-            return TRUE;
+            if (itemFound(i))
+            {
+                return TRUE;
+            }
+            any = TRUE;
         }
     }
-    return FALSE;
+    return !any;
 }
 
 /* Found items of a kind, by key bit: letters of the code word, clearances. */
@@ -398,13 +405,15 @@ static s32 lettersFound(void)
     return n;
 }
 
+/* Cradle needs no GoldenEye Key any more (11-15, his call), older seeds included:
+ * a key found there is just a key. */
 static s32 cradleUnlocked(void)
 {
     s32 lvl;
 
     if (s_seed.options & OPT_GOAL_CODES)
     {
-        return lettersFound() == CODE_LETTERS && hasCradleKey();
+        return lettersFound() == CODE_LETTERS;
     }
     for (lvl = 0; lvl < RANDO_LEVELS; lvl++)
     {
@@ -413,7 +422,7 @@ static s32 cradleUnlocked(void)
             return FALSE;
         }
     }
-    return hasCradleKey();
+    return TRUE;
 }
 
 static s32 levelUnlocked(s32 lvl)
@@ -566,6 +575,13 @@ static void randoLoad(void)
         s_seed.dropAmmo = buf[off];
     }
     off += 1;
+    /* u32 mask of the levels mirror mode always mirrors (options bit 0x80) */
+    s_seed.mirrorMask = 0;
+    if (off + 4 <= len)
+    {
+        s_seed.mirrorMask = (u32)buf[off] | ((u32)buf[off + 1] << 8) | ((u32)buf[off + 2] << 16) | ((u32)buf[off + 3] << 24);
+    }
+    off += 4;
 
     if (!randoIoLoadSave(&s_save) || memcmp(s_save.magic, "GERV", 4) != 0
         || (s_save.version != RANDO_SAVE_VERSION && s_save.version != 3)
@@ -631,7 +647,8 @@ static void randoLoad(void)
                  s_seed.seedhi, s_seed.seedlo, s_diffNames[s_seed.difficulty & 3], nplaced,
                  nfound, nplaced, done[0] ? done : "none. ", open[0] ? open : "none");
         RANDOLOG("    guards' dropped guns hold %d rounds; mirror mode %s\n", s_seed.dropAmmo,
-                 (s_seed.options & OPT_MIRROR_ALL) ? "every level" : (s_seed.options & OPT_MIRROR) ? "random" : "off");
+                 (s_seed.options & OPT_MIRROR_SET) ? "on (seeded levels)" : (s_seed.options & OPT_MIRROR_ALL) ? "every level"
+                 : (s_seed.options & OPT_MIRROR) ? "random" : "off");
     }
 }
 
@@ -810,9 +827,9 @@ static void shortName(char *out, const char *pickup)
     out[n + 1] = '\0';
 }
 
-/* "Every level": always mirrored. "Random": decided afresh on every entry into
- * a level, retries included: not part of the seed, so nothing about it can be
- * learned from an earlier visit. GE_RANDO_MIRROR=0/1 forces it (tests). */
+/* Mirror mode: the levels the seed picked are mirrored every time. (Older
+ * seeds: "every level", or "random", decided afresh on every entry.)
+ * GE_RANDO_MIRROR=0/1 forces it (tests). */
 static s32 rollMirror(void)
 {
 #ifdef PORT
@@ -822,6 +839,10 @@ static s32 rollMirror(void)
     if (force)
     {
         return force[0] == '1';
+    }
+    if (s_seed.options & OPT_MIRROR_SET)
+    {
+        return s_level >= 0 && s_level < 32 && ((s_seed.mirrorMask >> s_level) & 1);
     }
     if (s_seed.options & OPT_MIRROR_ALL)
     {
@@ -1077,7 +1098,7 @@ void randoPatchSetup(s32 stageId)
         RANDOLOG("--> Enter %s (%s). Items hidden here: %s. Carried in and handed over: %s. [%d records, %d bytes added]\n",
                  s_levelNames[lvl], s_diffNames[lvlGetSelectedDifficulty() & 3], hidden[0] ? hidden : "none",
                  handed[0] ? handed : "none", nrec, extra);
-        if (s_seed.options & (OPT_MIRROR | OPT_MIRROR_ALL))
+        if (s_seed.options & (OPT_MIRROR | OPT_MIRROR_ALL | OPT_MIRROR_SET))
         {
             RANDOLOG("    mirror mode: %s this time\n", s_mirror ? "MIRRORED" : "normal");
         }
@@ -1313,7 +1334,7 @@ static char *codeProgress(const RandoItem *it)
     }
     if (it->kind == KIND_LETTER)
     {
-        strcpy(msg, "Code letter ");
+        strcpy(msg, "Code letter keycard ");
         len = strlen(msg);
         msg[len++] = CODE_WORD[it->keybit % CODE_LETTERS];
         msg[len++] = ':';

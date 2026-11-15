@@ -35,14 +35,14 @@ CARRIERS = ("greyer", "same")    # race-code order: index 0 is the default
 CARRIER_LABELS = {"greyer": "Slightly greyer", "same": "Look the same"}
 PLACEMENTS = ("anywhere", "original")   # race-code bit 11
 PLACEMENT_LABELS = {"anywhere": "Anywhere", "original": "Original locations only"}
-MIRRORS = ("off", "random", "all")      # race-code bits 13-14 (1 = "random", the old mirror bit)
-MIRROR_LABELS = {"off": "Off", "all": "Every level", "random": "Random each time you enter a level"}
+MIRRORS = ("off", "on")                 # race-code bits 13-14
+MIRROR_LABELS = {"off": "Off", "on": "On"}
+MIRROR_SHARE = 0.5             # mirror mode: each level's chance of being one of the mirrored ones
 DROP_AMMO = 5                  # default rounds in a gun a guard drops (race-code bits 15-19)
 DROP_AMMO_RANGE = range(1, 31)
 GOALS = ("codes", "all")                 # race-code bit 12
-GOAL_LABELS = {"codes": f"Satellite codes ({CODE_WORD} + GoldenEye Key opens Cradle)",
-               "all": "Beat every level (+ GoldenEye Key opens Cradle)"}
-LOGIC_VERSION = 12            # bump whenever generation can change for the same code
+GOAL_LABELS = {"codes": f"Find the {CODE_WORD} code letter keycards", "all": "Beat every level"}
+LOGIC_VERSION = 13            # bump whenever generation can change for the same code
 DIFFS = ("agent", "secret", "00agent")
 DIFF_CHARS = "ASO"
 ORIGINAL_SAME_LEVEL_WEIGHT = 0.04   # the same target there: few spots per level, so lower
@@ -77,8 +77,8 @@ class Settings:
     glow_items: bool = True         # items still to find pulse gold and show from afar
     carriers: str = "greyer"        # guards holding one: drawn slightly "greyer", or the "same"
     placement: str = "anywhere"     # "original": items only where the original game has one
-    goal: str = "codes"             # "codes": the code letters and the GoldenEye Key open Cradle
-    mirror: str = "off"             # "all": every level mirrored; "random": rolled in the game on each entry
+    goal: str = "codes"             # "codes": the code letter keycards open Cradle; "all": beating every level
+    mirror: str = "off"             # "on": a set of levels picked by the seed, always mirrored
     drop_ammo: int = DROP_AMMO      # rounds in a gun a guard drops (the same on every difficulty)
 
     def flags(self):
@@ -178,7 +178,7 @@ class World:
             opens = all(f"letter_{c.lower()}" in caps for c in CODE_WORD)
         else:
             opens = all(lv in beaten for lv in self.enabled if lv != "cradle")
-        if opens and "goldeneye_key" in caps:
+        if opens:
             out.add("cradle")
         return out & set(self.enabled)
 
@@ -322,7 +322,7 @@ def generate(seed, settings, world=None):
     extra_gates = {}
     for it in lock_items:
         extra_gates.setdefault(it.home, set()).add(it.key)
-    needed = logic.required_capabilities(diff, enabled, tier, tricks) | {"goldeneye_key"} \
+    needed = logic.required_capabilities(diff, enabled, tier, tricks) \
         | {it.key for it in lock_items} | {it.key for it in pool if it.clearance or it.letter >= 0}
     prog = [it for it in pool if set(it.capabilities()) & needed]
     prog_keys = {it.key for it in prog}
@@ -359,7 +359,7 @@ def generate(seed, settings, world=None):
                 opened, _ = state.progress(caps)
                 return sum(1 for s in all_spots if state.reachable(s, caps, opened))
             order.sort(key=room_without, reverse=True)
-        # the goal's items (code letters, the GoldenEye Key) go first, while the
+        # the goal's items (the code letters) go first, while the
         # whole game is open to them: placed last, they piled up in the start
         # levels (all five letters in one level in 1 seed of 200)
         order.sort(key=lambda it: it.letter >= 0 or it.cradle_key)
@@ -451,7 +451,7 @@ def generate(seed, settings, world=None):
         return dict(seed=seed, code=code, settings=settings, start=start, parents=parents, tricks=tricks,
                     locks=locks, extra_gates=extra_gates,
                     placement=placement, left_out=left_out, spheres=spheres, homes=homes, world=world,
-                    enabled=enabled,
+                    enabled=enabled, mirrored=pick_mirrored(seed, settings, enabled),
                     loadout=pick_loadout(rng), attempts=attempt + 1)
 
     raise GenerationError("could not build a balanced seed")
@@ -505,7 +505,7 @@ def original_spots(pool, homes, world, diff, enabled):
     (on the floor, on its guard, in its crate or safe, or handed over when the
     level starts like Q's gadgets) becomes a spot, so items swap places and no
     one carries anything they didn't before. Items the original game doesn't
-    have (clearances, code letters, the GoldenEye Key, new-lock keys) take
+    have (clearances, code letters, new-lock keys) take
     those places too, and the spare items that no longer fit are left out.
     Returns (spots, own: item key -> original spot)."""
     spots, own = [], {}
@@ -639,6 +639,15 @@ def pick_new_locks(rng, settings, enabled, world):
     return locks, items
 
 
+def pick_mirrored(seed, settings, enabled):
+    """Mirror mode: which levels are mirrored, every time they're entered. From
+    its own random stream, so turning it on doesn't move any item."""
+    if settings.mirror != "on":
+        return []
+    rng = SeedRNG(seed ^ 0x4D4952524F52)
+    return [lv for lv in enabled if rng.random() < MIRROR_SHARE]
+
+
 def pick_loadout(rng):
     first = rng.choice(["ITEM_WPPK", "ITEM_WPPKSIL"]) if rng.random() < 0.8 else rng.choice(LIGHT_WEAPONS)
     guns = [first]
@@ -656,7 +665,8 @@ def to_seedfile(res):
     items, props, ammo = world["enums"]["items"], world["enums"]["props"], world["enums"]["ammo"]
 
     seed = seedfile.Seed(seed=run_id(res["code"]), difficulty=DIFFS.index(settings.difficulty),
-                         bonus_levels=settings.bonus, show_handover=settings.show_handover, mirror=settings.mirror,
+                         bonus_levels=settings.bonus, show_handover=settings.show_handover,
+                         mirror_levels=[SP[k] for k in res["mirrored"]],
                          drop_ammo=settings.drop_ammo,
                          glow_items=settings.glow_items, carriers=settings.carriers,
                          goal_codes=settings.goal == "codes",
@@ -722,7 +732,7 @@ def describe(settings):
             f"crates/barrels {'on' if settings.containers else 'off'}, "
             f"announce carried items {'on' if settings.show_handover else 'off'}, "
             f"mirror mode: {MIRROR_LABELS[settings.mirror].lower()}, "
-            f"{settings.drop_ammo} rounds in guards' dropped guns, "
+            f"ammo in dropped guns {settings.drop_ammo}, "
             f"new locks {settings.new_locks}, "
             f"glowing items {'on' if settings.glow_items else 'off'}, "
             f"guards carrying items: {CARRIER_LABELS[settings.carriers].lower()}, "
@@ -736,6 +746,8 @@ def spoiler(res, words):
            describe(res["settings"]), "",
            "Goal: " + GOAL_LABELS[res["settings"].goal],
            "Start levels: " + ", ".join(names[k] for k in res["start"])]
+    if res["mirrored"]:
+        out.append("Mirrored levels: " + ", ".join(names[k] for k in sorted(res["mirrored"], key=SP.get)))
     for b, p in res["parents"].items():
         out.append(f"{names[b]} unlocks after beating {names[p]}")
     guns, rounds = res["loadout"]
@@ -783,7 +795,7 @@ def main(argv=None):
                     help="easy: no tricks required; normal: known tricks may be required; advanced: + glitches")
     ap.add_argument("--containers", action="store_true", help="also hide items inside crates and barrels")
     ap.add_argument("--mirror", choices=MIRRORS, default="off",
-                    help="all: every level mirrored; random: each time a level is entered, mirrored or not (PC build)")
+                    help="on: a set of levels picked by the seed is always mirrored (PC build)")
     ap.add_argument("--drop-ammo", type=int, default=DROP_AMMO, choices=DROP_AMMO_RANGE, metavar="1-30",
                     help=f"rounds in a gun a guard drops (default {DROP_AMMO}, the same on every difficulty)")
     ap.add_argument("--show-handover", action="store_true",
@@ -796,7 +808,7 @@ def main(argv=None):
     ap.add_argument("--original-locations", action="store_true",
                     help="items only where the original game has one (they swap places)")
     ap.add_argument("--goal", choices=GOALS, default="codes",
-                    help=f"codes: {CODE_WORD} + the GoldenEye Key open Cradle; all: beat every level, then Cradle")
+                    help=f"codes: the {CODE_WORD} code letter keycards open Cradle; all: beat every level, then Cradle")
     ap.add_argument("--out", default="data/rando")
     args = ap.parse_args(argv)
 
