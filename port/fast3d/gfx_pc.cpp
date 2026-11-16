@@ -1568,6 +1568,23 @@ static void gfx_transposed_matrix_mul(float res[3], const float a[3], const floa
     res[2] = a[0] * b[2][0] + a[1] * b[2][1] + a[2] * b[2][2];
 }
 
+/* Mirror mode (G_MIRROR_EXT, emitted by src/game/rando.c randoMirrorBegin/End):
+ * while on, everything drawn is flipped left-right about the viewport centre:
+ * vertices in clip space (with the culling winding reversed), 2D rectangles and
+ * scissors in screen space. The game itself never knows. */
+static bool s_mirror_x = false;
+static int32_t s_mirror_cx4 = SCREEN_WIDTH * 2;   /* viewport centre x, in quarter pixels */
+static uint32_t s_scissor_raw[5];                 /* the last scissor as the game set it */
+static bool s_scissor_raw_set = false;
+
+static void gfx_mirror_rect(int32_t *ulx, int32_t *lrx) {
+    if (s_mirror_x) {
+        const int32_t u = *ulx;
+        *ulx = 2 * s_mirror_cx4 - *lrx;
+        *lrx = 2 * s_mirror_cx4 - u;
+    }
+}
+
 static void calculate_normal_dir(const Light_t* light, float coeffs[3]) {
     const float light_dir[3] = { light->dir[0] / 127.f, light->dir[1] / 127.f, light->dir[2] / 127.f };
 
@@ -2126,6 +2143,9 @@ static void gfx_sp_vertex(size_t n_vertices, size_t dest_index, const Vtx* verti
         float z = v->v.ob[0] * rsp.MP_matrix[0][2] + v->v.ob[1] * rsp.MP_matrix[1][2] + v->v.ob[2] * rsp.MP_matrix[2][2] + rsp.MP_matrix[3][2];
         float w = v->v.ob[0] * rsp.MP_matrix[0][3] + v->v.ob[1] * rsp.MP_matrix[1][3] + v->v.ob[2] * rsp.MP_matrix[2][3] + rsp.MP_matrix[3][3];
 
+        if (s_mirror_x) {
+            x = -x;
+        }
         x = gfx_adjust_x_for_aspect_ratio(x, w);
 
         short U = v->v.tc[0] * rsp.texture_scaling_factor.s >> 16;
@@ -2468,6 +2488,10 @@ static void gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx, bo
             // If one vertex lies behind the eye, negating cross will give the correct result.
             // If all vertices lie behind the eye, the triangle will be rejected anyway.
             cross = -cross;
+        }
+
+        if (s_mirror_x) {
+            cross = -cross;   // mirroring reverses every triangle's winding
         }
 
         // If inverted culling is requested, negate the cross
@@ -3299,6 +3323,8 @@ static void gfx_calc_and_set_viewport(const Vp_t* viewport) {
     float x = (viewport->vtrans[0] / 4.0f) - width / 2.0f;
     float y = ((viewport->vtrans[1] / 4.0f) + height / 2.0f);
 
+    s_mirror_cx4 = (int32_t)lroundf((x + width / 2.0f) * 4.0f);
+
     rdp.viewport.x = x;
     rdp.viewport.y = y;
     rdp.viewport.width = width;
@@ -3384,6 +3410,14 @@ static void gfx_sp_texture(uint16_t sc, uint16_t tc, uint8_t level, uint8_t tile
 }
 
 static void gfx_dp_set_scissor(uint32_t mode, uint32_t ulx, uint32_t uly, uint32_t lrx, uint32_t lry) {
+    s_scissor_raw[0] = mode; s_scissor_raw[1] = ulx; s_scissor_raw[2] = uly;
+    s_scissor_raw[3] = lrx; s_scissor_raw[4] = lry;
+    s_scissor_raw_set = true;
+    if (s_mirror_x) {   /* the game's room and prop scissors are for the unflipped view */
+        const int32_t mu = 2 * s_mirror_cx4 - (int32_t)lrx, ml = 2 * s_mirror_cx4 - (int32_t)ulx;
+        ulx = mu < 0 ? 0u : (uint32_t)mu;
+        lrx = ml < 0 ? 0u : (uint32_t)ml;
+    }
     float x = ulx / 4.0f;
     float y = lry / 4.0f;
     float width = (lrx - ulx) / 4.0f;
@@ -3832,6 +3866,7 @@ static inline void gfx_hud_scale_rect(int32_t& ulx, int32_t& uly, int32_t& lrx, 
 
 static void gfx_dp_texture_rectangle(int32_t ulx, int32_t uly, int32_t lrx, int32_t lry, uint8_t tile, int16_t uls,
                                      int16_t ult, int16_t dsdx, int16_t dtdy, bool flip) {
+    gfx_mirror_rect(&ulx, &lrx);
     const float ov = (g_overlay_window_space && s_overlay_scale != 1.0f) ? s_overlay_scale : 1.0f;   /* D510 */
     if (s_hud_scale != 1.0f || ov != 1.0f) {   /* D226 */
         gfx_hud_scale_rect(ulx, uly, lrx, lry);
@@ -3950,6 +3985,7 @@ static void gfx_dp_image_rectangle(int32_t tile, int32_t w, int32_t h,
 }
 
 static void gfx_dp_fill_rectangle(int32_t ulx, int32_t uly, int32_t lrx, int32_t lry) {
+    gfx_mirror_rect(&ulx, &lrx);
     gfx_hud_scale_rect(ulx, uly, lrx, lry);   /* D226 */
     if (rdp.color_image_address == rdp.z_buf_address) {
         // Don't clear Z buffer here since we already did it with glClear
@@ -4032,7 +4068,7 @@ static void gfx_sp_vertex_float(size_t n_vertices, size_t dest_index, const Port
     for (size_t i = 0; i < n_vertices; i++, dest_index++) {
         const PortFloatVtx* v = &vertices[i];
         struct LoadedVertex* d = &rsp.loaded_vertices[dest_index];
-        float x = gfx_adjust_x_for_aspect_ratio(v->x, v->w);
+        float x = gfx_adjust_x_for_aspect_ratio(s_mirror_x ? -v->x : v->x, v->w);
         float y = v->y, z = v->z, w = v->w;
         d->u = v->s * (float)rsp.texture_scaling_factor.s / 65536.0f;
         d->v = v->t * (float)rsp.texture_scaling_factor.t / 65536.0f;
@@ -4175,6 +4211,13 @@ static void gfx_run_dl(Gfx* cmd) {
                 break;
             case G_FLOATVTX_EXT: /* D245 */
                 gfx_sp_vertex_float(C0(0, 16), C0(16, 8), (const PortFloatVtx*)seg_addr(cmd->words.w1));
+                break;
+            case 0x48: /* G_MIRROR_EXT: w1 = 1 mirrors left-right about the viewport centre, 0 stops */
+                s_mirror_x = (cmd->words.w1 & 1) != 0;
+                if (s_scissor_raw_set) {   /* the current scissor changes side with it */
+                    gfx_dp_set_scissor(s_scissor_raw[0], s_scissor_raw[1], s_scissor_raw[2],
+                                       s_scissor_raw[3], s_scissor_raw[4]);
+                }
                 break;
             case 0x46: /* G_HUDSCALE_EXT (D226): w0 low16 = scale*256 (0/256 = off), w1 = ax4<<16 | ay4 */
             {
@@ -4608,6 +4651,7 @@ static double s_perf_maxiv = 0, s_perf_maxiv_dl = 0, s_perf_maxiv_run = 0;
 static uint64_t s_perf_maxiv_frame = 0, s_perf_over20 = 0, s_perf_over33 = 0;
 
 extern "C" void gfx_run(Gfx* commands) {
+    s_mirror_x = false;
     s_hud_scale = 1.0f;   /* D226: never carry a HUD scale across frames */
     const uint64_t perf_t0 = gfx_perfstat_on() ? gfx_perf_now_ns() : 0;
     ++num_dls;

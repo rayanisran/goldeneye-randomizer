@@ -52,6 +52,7 @@ class Seed:
     glow_items: bool = True             # items still to find pulse gold
     carriers: str = "greyer"            # guards holding one: "greyer" or "same"
     goal_codes: bool = True             # the code letters and the GoldenEye Key open Cradle
+    mirror: bool = False                # each level entry randomly mirrors the level
     bonus_parent: tuple = (NO_LEVEL, NO_LEVEL)
     start_pads: list = field(default_factory=lambda: [0] * LEVELS)
     items: list = field(default_factory=list)
@@ -68,7 +69,7 @@ class Seed:
                            (1 if self.bonus_levels else 0) | (2 if self.show_handover else 0)
                            | (4 if self.glow_items else 0)
                            | (8 if self.carriers == "greyer" else 0)
-                           | (16 if self.goal_codes else 0),
+                           | (16 if self.goal_codes else 0) | (32 if self.mirror else 0),
                            self.seed & 0xFFFFFFFF, (self.seed >> 32) & 0xFFFFFFFF, mask,
                            self.bonus_parent[0], self.bonus_parent[1],
                            len(self.items), len(self.loadout), len(self.topups))

@@ -5001,6 +5001,19 @@ void caclulate_gun_crosshair_position_rotation(f32 turn_x, f32 turn_y, f32 guncr
     g_CurrentPlayer->field_FFC.x += getPlayer_c_screenleft();
     g_CurrentPlayer->field_FFC.y += getPlayer_c_screentop();
 
+#ifdef GE_RANDOMIZER
+    {
+        /* mirror mode: the gun is drawn unflipped, so it leans toward the crosshair
+         * where it appears on screen. Only the gun model reads this; shots use
+         * crosshair_angle. */
+        extern s32 randoMirrorOn(void);
+        if (randoMirrorOn())
+        {
+            g_CurrentPlayer->field_FFC.x = (2.0f * getPlayer_c_screenleft()) + screen_width - g_CurrentPlayer->field_FFC.x;
+        }
+    }
+#endif
+
     transformAndNormalizeByLength2Dto3D(&g_CurrentPlayer->field_FFC, &coords, 1000.0f);
     sub_GAME_7F067AB4(&coords);
 }

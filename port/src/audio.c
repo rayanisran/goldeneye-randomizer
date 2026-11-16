@@ -441,6 +441,21 @@ void audioSetNextBuffer(const s16 *buf, u32 len)
         }
     }
 
+#ifdef GE_RANDOMIZER
+    /* mirror mode: sounds come from the side they appear on */
+    static s16 mirrored[16384];
+    if (buf && len && len <= sizeof(mirrored)) {
+        extern s32 randoMirrorOn(void);
+        if (randoMirrorOn()) {
+            const s16 *from = buf;
+            for (u32 i = 0; i + 1 < len / 2u; i += 2) {
+                mirrored[i] = from[i + 1];
+                mirrored[i + 1] = from[i];
+            }
+            buf = mirrored;
+        }
+    }
+#endif
     if (dev && buf && len) {
         if (audioGetSamplesBuffered() < queueLimit) {
             SDL_QueueAudio(dev, buf, len);

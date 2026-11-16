@@ -836,6 +836,9 @@ Gfx* lvlRender(Gfx* DL)
             }
 
             DL = viSetupScreensForNumPlayers(DL);
+#ifdef GE_RANDOMIZER
+            DL = randoMirrorBegin(DL);   /* off again in maybe_mp_interface, before the HUD */
+#endif
             DL = skyRender(DL);
             bgRoomVisibilityRelated();
             propsTick();
@@ -944,6 +947,9 @@ Gfx* lvlRender(Gfx* DL)
         }
     }
 
+#ifdef GE_RANDOMIZER
+    DL = randoMirrorEnd(DL);
+#endif
     gDPSetScissor(DL++, G_SC_NON_INTERLACE, 0, 0, viGetX(), viGetY());
 
     return DL;

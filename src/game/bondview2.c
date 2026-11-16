@@ -9284,6 +9284,9 @@ Gfx *maybe_mp_interface(Gfx *gdl)
 
     if (g_CurrentPlayer->cameramode == 1)
     {
+#ifdef GE_RANDOMIZER
+        gdl = randoMirrorEnd(gdl);
+#endif
         bondviewIntroCameraTextTick();
 #ifdef PORT
         PORT_HUD_ASPECT(gdl, GE_HUD_ASPECT_CENTER);
@@ -9332,6 +9335,13 @@ Gfx *maybe_mp_interface(Gfx *gdl)
     }
 
     gunUpdateAndFireBothHands();
+#ifdef GE_RANDOMIZER
+    /* The world ends here. Bond keeps his gun in his right hand on the right of
+     * the screen (Rayan, 11-06): gun, hand, casings, watch, text and gauges are
+     * drawn normally. caclulate_gun_crosshair_position_rotation aims the gun at
+     * the mirrored crosshair. */
+    gdl = randoMirrorEnd(gdl);
+#endif
     gunRenderCasings(&gdl);
     gunRenderFirstPersonGunModels(&gdl);
 #ifdef PORT
@@ -9507,7 +9517,13 @@ Gfx *maybe_mp_interface(Gfx *gdl)
 #ifdef PORT
     PORT_HUD_ASPECT(gdl, GE_HUD_ASPECT_NONE);
 #endif
+#ifdef GE_RANDOMIZER
+    gdl = randoMirrorBegin(gdl);     /* the sight stays on what the shot will hit in the mirrored world */
+#endif
     gunDrawSight(&gdl);
+#ifdef GE_RANDOMIZER
+    gdl = randoMirrorEnd(gdl);
+#endif
     gdl = generate_ammo_total_microcode(gdl);
 #ifdef PORT
     PORT_HUD_ASPECT(gdl, GE_HUD_ASPECT_CENTER);

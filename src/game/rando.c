@@ -45,6 +45,7 @@
 #include "model.h"
 #ifdef PORT
 #include <stdlib.h>
+#include <time.h>
 #else
 /* libultra's memset is bzero(ptr, len) under another name, so memset(p, 0, n)
  * cleared nothing on the N64 (a blank EEPROM's 0xFF read as every item found).
@@ -107,6 +108,7 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" 
 #define OPT_SHOW_HANDOVER  0x02   /* announce items handed over at level start */
 #define OPT_GLOW_ITEMS     0x04   /* items still to find pulse gold, seen from afar */
 #define OPT_CARRIER_GREYER 0x08   /* guards holding one are drawn slightly greyer */
+#define OPT_MIRROR         0x20   /* each level entry randomly mirrors the level */
 #define OPT_GOAL_CODES     0x10   /* the code letters and the GoldenEye Key open Cradle,
                                    * not beating every level */
 
@@ -213,6 +215,7 @@ static s32 s_nrec;
 static struct { s32 link; s16 pad; } s_safes[RANDO_MAX_SAFES];   /* where each safe's contents sit */
 static s32 s_nsafes;
 static s32 s_playStarted;             /* intro over: handed-over items may be collected */
+static s32 s_mirror;                  /* this entry into the level is mirrored */
 static s32 s_cradleOpenAtEntry;       /* Cradle's fanfare plays on the completion that opened it */
 static ObjectRecord *s_dropFollower;  /* dropped wherever the script drops its object (isScriptDrop) */
 
@@ -790,6 +793,36 @@ static void shortName(char *out, const char *pickup)
     out[n + 1] = '\0';
 }
 
+/* Decided afresh on every entry into a level, retries included: not part of
+ * the seed, so nothing about it can be learned from an earlier visit.
+ * GE_RANDO_MIRROR=0/1 forces it (tests). */
+static s32 rollMirror(void)
+{
+#ifdef PORT
+    static u32 state;
+    const char *force = getenv("GE_RANDO_MIRROR");
+
+    if (force)
+    {
+        return force[0] == '1';
+    }
+    if (!(s_seed.options & OPT_MIRROR))
+    {
+        return FALSE;
+    }
+    if (state == 0)
+    {
+        state = (u32)time(NULL) ^ ((u32)clock() << 12) ^ 0x9E3779B9u;
+    }
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    return (state >> 16) & 1;
+#else
+    return FALSE;   /* the N64 build has no mirror path */
+#endif
+}
+
 void randoPatchSetup(s32 stageId)
 {
     u32 *offsets = s_offsets;
@@ -799,6 +832,7 @@ void randoPatchSetup(s32 stageId)
 
     s_ntracked = 0;
     s_level = -1;
+    s_mirror = FALSE;
     s_completed = FALSE;
     s_snapValid = FALSE;
     s_tickCount = 0;
@@ -829,6 +863,7 @@ void randoPatchSetup(s32 stageId)
         return;
     }
     s_level = lvl;
+    s_mirror = rollMirror();
 
     base = (u8 *)g_CurrentSetup.propDefs;
     nrec = 0;
@@ -1021,6 +1056,10 @@ void randoPatchSetup(s32 stageId)
         RANDOLOG("--> Enter %s (%s). Items hidden here: %s. Carried in and handed over: %s. [%d records, %d bytes added]\n",
                  s_levelNames[lvl], s_diffNames[lvlGetSelectedDifficulty() & 3], hidden[0] ? hidden : "none",
                  handed[0] ? handed : "none", nrec, extra);
+        if (s_seed.options & OPT_MIRROR)
+        {
+            RANDOLOG("    mirror mode: %s this time\n", s_mirror ? "MIRRORED" : "normal");
+        }
     }
 }
 
@@ -1590,6 +1629,7 @@ void randoStageLoad(s32 stage)
         logInventory("kept");
     }
     s_level = -1;
+    s_mirror = FALSE;
     s_died = FALSE;
     s_ntracked = 0;
     s_snapValid = FALSE;
@@ -1804,6 +1844,42 @@ Gfx *randoGlowEnd(Gfx *gdl, u32 tint)
 f32 randoSightSize(PropRecord *prop, f32 size)
 {
     return (size < GLOW_SIGHT && randoGlow(prop) != 0) ? GLOW_SIGHT : size;
+}
+
+/* ------------------------------------------------------------ mirror mode */
+
+#define MIRROR_EXT 0x48   /* port/fast3d/gfx_pc.cpp G_MIRROR_EXT */
+
+s32 randoMirrorOn(void)
+{
+    return s_level >= 0 && s_mirror;
+}
+
+s32 randoMirrorInputOn(void)
+{
+    return randoMirrorOn() && g_CurrentPlayer != NULL && g_CurrentPlayer->watch_animation_state == 0;
+}
+
+Gfx *randoMirrorBegin(Gfx *gdl)
+{
+#ifdef PORT
+    if (randoMirrorOn())
+    {
+        gDma0p(gdl++, MIRROR_EXT, 1, 0);
+    }
+#endif
+    return gdl;
+}
+
+Gfx *randoMirrorEnd(Gfx *gdl)
+{
+#ifdef PORT
+    if (randoMirrorOn())
+    {
+        gDma0p(gdl++, MIRROR_EXT, 0, 0);
+    }
+#endif
+    return gdl;
 }
 
 s32 randoStageStatus(s32 levelid, s32 difficulty, s32 *status)

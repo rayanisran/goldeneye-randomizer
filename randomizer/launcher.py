@@ -15,7 +15,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import generate as gen
-from . import levels, n64rom, world as worlddata
+from . import levels, n64rom, world as worlddata, wsplit
 
 APP_TITLE = "GoldenEye Randomizer"
 DIFF_LABELS = {"agent": "Agent", "secret": "Secret Agent", "00agent": "00 Agent"}
@@ -84,6 +84,7 @@ class Launcher(tk.Tk):
         self.tier = tk.StringVar(value="normal")
         self.containers = tk.BooleanVar(value=False)
         self.handover = tk.BooleanVar(value=False)
+        self.mirror = tk.BooleanVar(value=False)
         self.new_locks = tk.IntVar(value=0)
         self.glow_items = tk.BooleanVar(value=True)
         self.carriers = tk.StringVar(value="greyer")
@@ -108,6 +109,7 @@ class Launcher(tk.Tk):
             (self.containers, "Hide items inside crates and barrels"),
             (self.handover, "Announce carried items when a level starts (hints where they're used)"),
             (self.glow_items, "Small items still to find glow gold (keys, keycards, mines...)"),
+            (self.mirror, "Mirror mode: each time you enter a level, it may be flipped left to right (PC only)"),
         ]
         for r, (var, text) in enumerate(checks, start=4):
             ttk.Checkbutton(box, text=text, variable=var).grid(row=r, column=0, columnspan=4, sticky="w", padx=8)
@@ -115,22 +117,22 @@ class Launcher(tk.Tk):
         for i, key in enumerate(gen.PLACEMENTS):
             ttk.Radiobutton(box, text=gen.PLACEMENT_LABELS[key], value=key, variable=self.placement).grid(
                 row=3, column=1 + 2 * i, columnspan=2, sticky="w")
-        ttk.Label(box, text="Guards carrying an item").grid(row=8, column=0, sticky="w", padx=8)
+        ttk.Label(box, text="Guards carrying an item").grid(row=9, column=0, sticky="w", padx=8)
         for i, key in enumerate(gen.CARRIERS):
             ttk.Radiobutton(box, text=gen.CARRIER_LABELS[key], value=key, variable=self.carriers).grid(
-                row=8, column=1 + i, sticky="w")
-        ttk.Label(box, text="New locks").grid(row=9, column=0, sticky="w", padx=8)
+                row=9, column=1 + i, sticky="w")
+        ttk.Label(box, text="New locks").grid(row=10, column=0, sticky="w", padx=8)
         ttk.Spinbox(box, from_=0, to=10, textvariable=self.new_locks, width=4, state="readonly").grid(
-            row=9, column=1, sticky="w")
+            row=10, column=1, sticky="w")
         ttk.Label(box, text="doors that are normally open get locked; each new key is named for its level",
-                  foreground="#555").grid(row=9, column=2, columnspan=2, sticky="w")
-        ttk.Label(box, text="Goal").grid(row=10, column=0, sticky="nw", padx=8)
+                  foreground="#555").grid(row=10, column=2, columnspan=2, sticky="w")
+        ttk.Label(box, text="Goal").grid(row=11, column=0, sticky="nw", padx=8)
         for i, key in enumerate(gen.GOALS):
             ttk.Radiobutton(box, text=gen.GOAL_LABELS[key], value=key, variable=self.goal).grid(
-                row=10 + i, column=1, columnspan=3, sticky="w")
-        ttk.Label(box, text="Seed (blank = random)").grid(row=12, column=0, sticky="w", padx=8, pady=(6, 2))
-        ttk.Entry(box, textvariable=self.seed_text, width=22).grid(row=12, column=1, columnspan=2, sticky="w", pady=(6, 2))
-        ttk.Button(box, text="Generate", command=self.generate_new).grid(row=12, column=3, sticky="e", padx=8, pady=(6, 6))
+                row=11 + i, column=1, columnspan=3, sticky="w")
+        ttk.Label(box, text="Seed (blank = random)").grid(row=13, column=0, sticky="w", padx=8, pady=(6, 2))
+        ttk.Entry(box, textvariable=self.seed_text, width=22).grid(row=13, column=1, columnspan=2, sticky="w", pady=(6, 2))
+        ttk.Button(box, text="Generate", command=self.generate_new).grid(row=13, column=3, sticky="e", padx=8, pady=(6, 6))
 
         race = ttk.LabelFrame(self, text="Race: paste the code your opponent sends you")
         race.grid(row=1, column=0, sticky="nsew", **pad)
@@ -148,16 +150,61 @@ class Launcher(tk.Tk):
         note = ("Each level opens when you find its clearance, or when you beat the level before it.\n"
                 "Good to know: the covert modem (Dam) and the tracking bug (Frigate) are the same item, so either\n"
                 "one works for both levels. The camera is shared by Bunker 1 and Silo the same way.")
-        ttk.Label(self, text=note, foreground="#555").grid(row=3, column=0, sticky="w", padx=12, pady=(0, 10))
+        ttk.Label(self, text=note, foreground="#555").grid(row=4, column=0, sticky="w", padx=12, pady=(0, 10))
 
+        self.game = None
+        self.timer = wsplit.Timer()
+        if wsplit.supported():
+            self.build_timer_box(pad)
         self.refresh()
+
+    def build_timer_box(self, pad):
+        s = wsplit.load_settings(self.rando)
+        self.timer_open = tk.BooleanVar(value=s["open"])
+        self.timer_start = tk.BooleanVar(value=s["start"])
+        self.timer_path = tk.StringVar(value=s["path"])
+        self.timer_note = tk.StringVar()
+        box = ttk.LabelFrame(self, text="Timer")
+        box.grid(row=3, column=0, sticky="nsew", **pad)
+        ttk.Checkbutton(box, text="Open WSplit when you press PLAY", variable=self.timer_open).grid(
+            row=0, column=0, columnspan=3, sticky="w", padx=8)
+        self.timer_start_check = ttk.Checkbutton(
+            box, text="Start the timer when the game opens, and pause it when the game closes",
+            variable=self.timer_start)
+        self.timer_start_check.grid(row=1, column=0, columnspan=3, sticky="w", padx=8)
+        ttk.Label(box, text="WSplit location").grid(row=2, column=0, sticky="w", padx=8, pady=(4, 0))
+        ttk.Entry(box, textvariable=self.timer_path, width=58).grid(row=2, column=1, sticky="w", pady=(4, 0))
+        ttk.Button(box, text="Browse...", command=self.browse_timer).grid(row=2, column=2, sticky="e", padx=8, pady=(4, 0))
+        ttk.Label(box, textvariable=self.timer_note, foreground="#555").grid(row=3, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
+        for var in (self.timer_open, self.timer_start, self.timer_path):
+            var.trace_add("write", lambda *_: self.timer_changed())
+        self.show_timer_state()
+
+    def show_timer_state(self):
+        on = self.timer_open.get()
+        self.timer_start_check.config(state="normal" if on else "disabled")
+        missing = on and not Path(self.timer_path.get()).is_file()
+        self.timer_note.set("WSplit isn't at this location, so PLAY will start the game without it." if missing else "")
+
+    def timer_changed(self):
+        self.show_timer_state()
+        try:
+            wsplit.save_settings(self.rando, {"path": self.timer_path.get(), "open": self.timer_open.get(),
+                                              "start": self.timer_start.get()})
+        except OSError as e:
+            messagebox.showerror(APP_TITLE, f"Could not save the timer settings: {e}")
+
+    def browse_timer(self):
+        picked = filedialog.askopenfilename(title="WSplit", filetypes=[("WSplit", "WSplit.exe"), ("Programs", "*.exe")])
+        if picked:
+            self.timer_path.set(str(Path(picked)))
 
     # -------------------------------------------------------------- actions
 
     def settings(self):
         return gen.Settings(self.diff.get(), self.bonus.get(), self.tier.get(),
                             self.containers.get(), self.handover.get(), int(self.new_locks.get()),
-                            self.glow_items.get(), self.carriers.get(), self.placement.get(), self.goal.get())
+                            self.glow_items.get(), self.carriers.get(), self.placement.get(), self.goal.get(), self.mirror.get())
 
     def run(self, seed, settings):
         if (self.rando / "seed.bin").exists() and not messagebox.askyesno(
@@ -289,7 +336,14 @@ class Launcher(tk.Tk):
         if not (self.rando / "seed.bin").exists():
             messagebox.showinfo(APP_TITLE, "Generate a seed or load a race code first.")
             return
-        subprocess.Popen([str(exe)], cwd=str(self.root))
+        if self.game and self.game.poll() is None:
+            messagebox.showinfo(APP_TITLE, "The game is already running.")
+            return
+        problem = self.timer.open(self.rando)
+        if problem:
+            messagebox.showwarning(APP_TITLE, f"{problem}\n\nThe game will start without it.")
+        self.game = subprocess.Popen([str(exe)], cwd=str(self.root))
+        self.timer.run_with(self.game)
 
 
 def selftest(path):

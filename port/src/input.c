@@ -1776,6 +1776,12 @@ void inputUpdate(void)
 
     /* Raw px; per-mode sensitivity is applied in inputComputePad(). Accumulate
      * in case inputUpdate() is polled more than once between pad reads. */
+#ifdef GE_RANDOMIZER
+    {
+        extern s32 randoMirrorInputOn(void);
+        if (randoMirrorInputOn()) dx = -dx;   /* mirror mode: left is still left on screen */
+    }
+#endif
     mouseDX += dx;
     mouseDY += dy;
 }
@@ -2250,6 +2256,22 @@ unsigned inputComputePad(int idx, signed char *stick_x, signed char *stick_y)
     s_slot = idx;
     r = inputComputePadSlot(idx, stick_x, stick_y);
     s_slot = -1;
+#ifdef GE_RANDOMIZER
+    {
+        /* mirror mode: turning, strafing and aiming stay true to the flipped view */
+        extern s32 randoMirrorInputOn(void);
+        if (idx == 0 && randoMirrorInputOn()) {
+            const unsigned sides = GE_CONT_C | GE_CONT_F | GE_CONT_LEFT | GE_CONT_RIGHT;
+            unsigned swapped = r & ~sides;
+            if (r & GE_CONT_C) swapped |= GE_CONT_F;
+            if (r & GE_CONT_F) swapped |= GE_CONT_C;
+            if (r & GE_CONT_LEFT) swapped |= GE_CONT_RIGHT;
+            if (r & GE_CONT_RIGHT) swapped |= GE_CONT_LEFT;
+            r = swapped;
+            if (stick_x) *stick_x = *stick_x == -128 ? 127 : (signed char)-*stick_x;
+        }
+    }
+#endif
     return r;
 }
 

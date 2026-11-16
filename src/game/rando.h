@@ -108,6 +108,17 @@ Gfx *randoGlowEnd(Gfx *gdl, u32 tint);
 /* propobj.c distance fade and culling: glowing items stay visible as far as a guard. */
 f32  randoSightSize(PropRecord *prop, f32 size);
 
+/* Mirror mode (a seed setting, PC only): each time a level is entered it is
+ * randomly mirrored or not. lv.c / bondview2.c wrap the world and the sight in
+ * Begin/End; the gun, watch, text and gauges are drawn normally. */
+Gfx *randoMirrorBegin(Gfx *gdl);
+Gfx *randoMirrorEnd(Gfx *gdl);
+/* This level is mirrored right now: audio.c swaps left and right. */
+s32  randoMirrorOn(void);
+/* ...and the player is controlling Bond, not the watch: input.c flips turning
+ * and strafing so left is still left on screen. */
+s32  randoMirrorInputOn(void);
+
 /* Set when a randomizer item is picked up; bondview2.c draws the next bottom
  * message in yellow and clears it. randoTick clears a stale flag each frame. */
 extern s32 g_randoHighlightMsg;

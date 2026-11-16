@@ -75,6 +75,7 @@ class Settings:
     carriers: str = "greyer"        # guards holding one: drawn slightly "greyer", or the "same"
     placement: str = "anywhere"     # "original": items only where the original game has one
     goal: str = "codes"             # "codes": the code letters and the GoldenEye Key open Cradle
+    mirror: bool = False            # each level entry randomly mirrors the level (rolled in the game)
 
     def flags(self):
         # glow stored inverted and carriers as an index with "greyer" = 0, so
@@ -82,7 +83,7 @@ class Settings:
         return (1 if self.bonus else 0) | (logic.TIERS.index(self.tier) << 1) | \
                (8 if self.containers else 0) | (16 if self.show_handover else 0) | (self.new_locks << 5) | \
                (0 if self.glow_items else 512) | (CARRIERS.index(self.carriers) << 10) | \
-               (PLACEMENTS.index(self.placement) << 11) | (GOALS.index(self.goal) << 12)
+               (PLACEMENTS.index(self.placement) << 11) | (GOALS.index(self.goal) << 12) | (8192 if self.mirror else 0)
 
 
 # ------------------------------------------------------------------ race codes
@@ -118,7 +119,7 @@ def parse_race_code(code, world):
                         tier=logic.TIERS[(flags >> 1) & 3], containers=bool(flags & 8),
                         show_handover=bool(flags & 16), new_locks=(flags >> 5) & 15,
                         glow_items=not flags & 512, carriers=CARRIERS[(flags >> 10) & 1], placement=PLACEMENTS[(flags >> 11) & 1],
-                        goal=GOALS[(flags >> 12) & 1])
+                        goal=GOALS[(flags >> 12) & 1], mirror=bool(flags & 8192))
     return int(parts[3], 36), settings
 
 
@@ -646,7 +647,7 @@ def to_seedfile(res):
     items, props, ammo = world["enums"]["items"], world["enums"]["props"], world["enums"]["ammo"]
 
     seed = seedfile.Seed(seed=run_id(res["code"]), difficulty=DIFFS.index(settings.difficulty),
-                         bonus_levels=settings.bonus, show_handover=settings.show_handover,
+                         bonus_levels=settings.bonus, show_handover=settings.show_handover, mirror=settings.mirror,
                          glow_items=settings.glow_items, carriers=settings.carriers,
                          goal_codes=settings.goal == "codes",
                          start_levels=[SP[k] for k in res["start"]],
@@ -710,6 +711,7 @@ def describe(settings):
             f"logic {settings.tier}, "
             f"crates/barrels {'on' if settings.containers else 'off'}, "
             f"announce carried items {'on' if settings.show_handover else 'off'}, "
+            f"mirror mode {'on' if settings.mirror else 'off'}, "
             f"new locks {settings.new_locks}, "
             f"glowing items {'on' if settings.glow_items else 'off'}, "
             f"guards carrying items: {CARRIER_LABELS[settings.carriers].lower()}, "
@@ -769,6 +771,8 @@ def main(argv=None):
     ap.add_argument("--logic", choices=logic.TIERS, default="normal",
                     help="easy: no tricks required; normal: known tricks may be required; advanced: + glitches")
     ap.add_argument("--containers", action="store_true", help="also hide items inside crates and barrels")
+    ap.add_argument("--mirror", action="store_true",
+                    help="each time a level is entered, randomly mirror it or not (PC build)")
     ap.add_argument("--show-handover", action="store_true",
                     help="announce carried items when a level starts (off: it hints where they're used)")
     ap.add_argument("--new-locks", type=int, default=0, choices=range(0, 11), metavar="0-10",
@@ -790,7 +794,7 @@ def main(argv=None):
         seed = args.seed if args.seed is not None else new_seed()
         settings = Settings(args.difficulty, not args.no_bonus, args.logic, args.containers, args.show_handover,
                             args.new_locks, not args.no_glow, args.carriers,
-                            "original" if args.original_locations else "anywhere", args.goal)
+                            "original" if args.original_locations else "anywhere", args.goal, args.mirror)
     res = generate(seed, settings, world)
     _, words = write(res, args.out)
     print(f"race code {res['code']}  check words: {words}\n"
