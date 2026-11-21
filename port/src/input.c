@@ -1750,19 +1750,6 @@ void inputUpdate(void)
 {
     if (SDL_AtomicSet(&s_rescanReq, 0)) inputRescanPads();   /* D450 */
     SDL_GameControllerUpdate();
-#ifdef GE_RANDOMIZER
-    {   /* L or R on player 1's pad: randomizer item list, next page / close
-         * (menus only; a no-op in a level) */
-        extern void optionsRandoListToggle(void);
-        static int prevL = 0, prevR = 0;
-        SDL_GameController *p0 = slotPad(0);
-        int l = p0 && SDL_GameControllerGetButton(p0, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
-        int r = p0 && SDL_GameControllerGetButton(p0, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
-        if ((l && !prevL) || (r && !prevR)) optionsRandoListToggle();
-        prevL = l;
-        prevR = r;
-    }
-#endif
     if (s_seatCompactOwed && !inputMpSplit()) {
         inputOpenPads();   /* DNEW-mp-1: match over -> compact the seats */
     }
@@ -2260,6 +2247,36 @@ unsigned inputComputePad(int idx, signed char *stick_x, signed char *stick_y)
     r = inputComputePadSlot(idx, stick_x, stick_y);
     s_slot = -1;
 #ifdef GE_RANDOMIZER
+    if (idx == 0) {
+        /* Randomizer item list (menus): L or R opens it (I on the keyboard,
+         * video.c) and closes it on any page; A / Z next page, B previous page
+         * (both close past the end). While it is open nothing reaches the menu
+         * underneath, and a button still held when it closes stays hidden
+         * until released, so the A that closes it doesn't also pick a mission. */
+        extern int optionsRandoListOpen(void);
+        extern void optionsRandoListStep(int dir);
+        extern void optionsRandoListToggle(void);
+        static unsigned prev = 0, swallow = 0;
+        unsigned pressed = r & ~prev;
+        prev = r;
+        if (optionsRandoListOpen()) {
+            if (pressed & (GE_CONT_L | GE_CONT_R)) optionsRandoListToggle();   /* close, any page */
+            else if (pressed & (GE_CONT_A | GE_CONT_G)) optionsRandoListStep(+1);
+            else if (pressed & GE_CONT_B) optionsRandoListStep(-1);
+            swallow = r;
+        } else {
+            swallow &= r;     /* forget a button once it is released */
+            if (pressed & (GE_CONT_L | GE_CONT_R)) {
+                optionsRandoListToggle();   /* opens on the menus; a no-op in a level */
+                if (optionsRandoListOpen()) swallow = r;
+            }
+        }
+        r &= ~swallow;
+        if (optionsRandoListOpen() && stick_x && stick_y) {
+            *stick_x = 0;     /* the menu underneath doesn't move either */
+            *stick_y = 0;
+        }
+    }
     {
         /* mirror mode: turning, strafing and aiming stay true to the flipped view */
         extern s32 randoMirrorInputOn(void);

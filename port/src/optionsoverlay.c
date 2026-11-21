@@ -3356,8 +3356,10 @@ static void tipSelfCheck(void);
 
 #ifdef GE_RANDOMIZER
 /* Randomizer item list: I (keyboard) or L / R (pad) on the menus shows every
- * item found so far on a dark see-through card, names only (no levels). Each
- * press shows the next page; the press after the last page closes it. */
+ * item found so far on a dark see-through card, names only (no levels).
+ * While it is open (input.c inputComputePad feeds it and keeps the presses
+ * from the menu underneath): A or Z next page (closes after the last), B
+ * previous page (closes on the first), R / L / I close it on any page. */
 extern int randoMenuItemNames(const char **names, int max);
 static int s_randoList = 0;    /* page shown, 1-based; 0 = closed */
 static int s_randoPages = 1;   /* pages at the last draw */
@@ -3368,8 +3370,22 @@ void optionsRandoListToggle(void)
     if (s_randoList == 0) {
         s_randoList = randoMenuItemNames(probe, 0) >= 0 ? 1 : 0;
     } else {
-        s_randoList = s_randoList < s_randoPages ? s_randoList + 1 : 0;
+        s_randoList = 0;   /* open: L / R / I close it, whatever the page */
     }
+}
+
+/* dir +1: next page, closing after the last; -1: previous, closing on the first */
+void optionsRandoListStep(int dir)
+{
+    if (s_randoList == 0) return;
+    s_randoList += dir;
+    if (s_randoList < 1 || s_randoList > s_randoPages) s_randoList = 0;
+}
+
+static int randoListWanted(void);
+int optionsRandoListOpen(void)
+{
+    return randoListWanted() != 0;
 }
 
 static int randoListWanted(void)
@@ -3391,7 +3407,7 @@ static Gfx *randoListEmit(Gfx *gdl, s32 W, s32 H)
     char title[48];
 
     if (n < 0) return gdl;
-    rows = (y1 - top - 6) / lineH;
+    rows = (y1 - top - 6 - lineH - 2) / lineH;   /* last line: the controls hint */
     if (rows < 1) rows = 1;
     cols = n > rows ? 2 : 1;
     per = rows * cols;
@@ -3413,12 +3429,12 @@ static Gfx *randoListEmit(Gfx *gdl, s32 W, s32 H)
         gdl = drawBody(gdl, x0 + 8 + (i / rows) * colW, top + (i % rows) * lineH, names[first + i], 0xf0f0f0ff);
     }
     if (s_randoPages > 1) {
-        snprintf(title, sizeof(title), page < s_randoPages ? "PAGE %d/%d (press again)" : "PAGE %d/%d",
-                 page, s_randoPages);
-        gdl = drawBodyR(gdl, x1 - 8, y0 + 4, title, 0x909090ff);
+        snprintf(title, sizeof(title), "PAGE %d/%d   R: Close", page, s_randoPages);
     } else {
-        gdl = drawBodyR(gdl, x1 - 8, y0 + 4, "I / L / R: close", 0x909090ff);
+        snprintf(title, sizeof(title), "R: Close");
     }
+    gdl = drawBodyR(gdl, x1 - 8, y0 + 4, title, 0x909090ff);
+    gdl = drawBodyR(gdl, x1 - 8, y1 - 4 - lineH, "(A/Z: Next Page, B: Previous Page)", 0x909090ff);
     return gdl;
 }
 #endif

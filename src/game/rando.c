@@ -1545,9 +1545,10 @@ void randoTick(void)
         {
             ObjectRecord *rec = s_tracked[i].rec;
 
-            if (!s_tracked[i].carried || rec->type == PROPDEF_COLLECTABLE)
+            if (!s_tracked[i].carried
+                || (rec->type == PROPDEF_COLLECTABLE && !(rec->runtime_bitflags & RUNTIMEBITFLAG_TAGGED)))
             {
-                continue;   /* collectables become weapon-inventory items, not props */
+                continue;   /* collectables become weapon-inventory items, not props (a tagged one is both) */
             }
             carried++;
             if (rec->prop && bondinvHasPropInInv(rec->prop))
@@ -1599,9 +1600,17 @@ void randoTick(void)
              * Bond's feet and are picked up the normal way once play starts:
              * forcing a pickup that uses the object up frees its prop under us
              * (a weapon crashed, 10-31; body armor too, 11-01). Only keys and
-             * documents, which go into the inventory, are put there. */
+             * documents, which go into the inventory, are put there.
+             * Exception: a level's own TAGGED weapon carried back home (the
+             * Golden Gun on Egyptian, a collect objective). A tagged object
+             * is never freed by the pickup (TICKOP_GIVETOPLAYER, its prop
+             * joins the inventory), and the objective checks exactly that
+             * prop: lying at the start pad it was never picked up, so the
+             * objective stayed open and Egyptian never ended (11-21). */
             if ((s_tracked[i].carried || s_tracked[i].atstart)
-                && (rec->type == PROPDEF_KEY || rec->type == PROPDEF_PROP)
+                && (rec->type == PROPDEF_KEY || rec->type == PROPDEF_PROP
+                    || (rec->type == PROPDEF_COLLECTABLE && !s_tracked[i].appended
+                        && (rec->runtime_bitflags & RUNTIMEBITFLAG_TAGGED)))
                 && rec->prop != NULL && !bondinvHasPropInInv(rec->prop))
             {
                 /* a new find is always announced; what's carried in only if the

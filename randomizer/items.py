@@ -124,7 +124,7 @@ POOL = [
     # tagged, but no script or objective uses it: a spare
     Item("aztec_dat", "the launch protocol DAT", "aztec", Rec("StandardProp", model="PROP_CHRDATTAPE"),
          progression=False),
-    _ld("explosive_floppy", "the explosive floppy", "aztec", "ITEM_EXPLOSIVEFLOPPY", "PROP_CHRMICROCODE"),
+    _ld("explosive_floppy", "the Guidance Data", "aztec", "ITEM_EXPLOSIVEFLOPPY", "PROP_CHRMICROCODE"),
     # Egyptian
     Item("golden_gun", "the Golden Gun", "egyptian", Rec("Collectable", item="ITEM_GOLDENGUN"),
          weapon="ITEM_GOLDENGUN"),

@@ -3,7 +3,7 @@ original game built from the decomp with the randomizer compiled in, see
 randomizer/n64/build_base.sh) plus a seed.
 
     python -m randomizer.n64rom --base ge007-rando-base.z64 --out run.z64 [settings]
-    python -m randomizer.n64rom --base ... --out ... --race 12-e978-A3-4FNP1QRP
+    python -m randomizer.n64rom --base ... --out ... --race 14-e978-A3-4FNP1QRP
 
 The ROM is padded to 16 MB. The seed goes at SEED_ROM; the game reads its own
 developer token string at TOKEN_ROM (test ROMs use it to boot straight into a

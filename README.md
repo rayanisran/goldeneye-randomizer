@@ -172,7 +172,7 @@ codes, advanced logic, Agent):
 
 ```bash
 python -m randomizer.n64rom --base randomizer/n64/build/ge007-rando-base.z64 --out rando.z64 --spoiler spoiler.txt
-python -m randomizer.n64rom --base ... --out rando.z64 --race 12-e978-A3-4FNP1QRP
+python -m randomizer.n64rom --base ... --out rando.z64 --race 14-e978-A3-4FNP1QRP
 ```
 
 `python -m randomizer.n64.validate --base ... --emulator <mupen64plus folder>`
@@ -181,7 +181,7 @@ boots every level of a few seeds in Mupen64Plus and checks each one runs.
 ## Racing
 
 1. One player sets up a seed and presses **Copy race code**. A code looks like
-   `12-e978-A3-4FNP1QRP` and holds the randomizer version, the world-data
+   `14-e978-A3-4FNP1QRP` and holds the randomizer version, the world-data
    fingerprint, all the settings and the seed.
 2. The other players paste it under **Race** and press **Load race seed**.
 3. Before you start, everyone compares the four **check words** (for
@@ -213,7 +213,7 @@ and `data/` on its own. Seeds can also be made without the GUI:
 
 ```sh
 python -m randomizer.generate --difficulty secret --logic normal --containers --goal codes
-python -m randomizer.generate --race 12-e978-A3-4FNP1QRP
+python -m randomizer.generate --race 14-e978-A3-4FNP1QRP
 ```
 
 Seed files land in `data/rando/` (`seed.bin` for the game,
