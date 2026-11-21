@@ -10,6 +10,7 @@
 #include "romdata.h"
 #ifdef PORT
 #include "envflag.h"   /* cached getenv for hot-path probes */
+#include "system.h"    /* sysLogPrintf: D582 one-shot diagnostic */
 #endif
 extern resource_lookup_data_entry resource_lookup_data_array[]; /* ob.c */
 
@@ -434,6 +435,24 @@ u8 * langGet(s32 slotID)
     }
 #endif
     u32 textslot_offset = textbank_ptr[slotID & 0x03FF]; /* load the textbank ptr table then get the slot's offset */
+#ifdef PORT
+    /* D582 (upstream #152, ported from release/v0.6.0): a bank pointer that
+     * passes the check above can still point at memory that no longer holds
+     * a language bank (seen: Cuba end credits after beating Cradle, offset ->
+     * 0xe236b67a, a randomizer run 11-21). Banks are < 64 KiB
+     * (romdataFixupLangBank), so a larger offset is stale data: log it and
+     * return an empty string (callers such as textMeasure dereference the
+     * result). */
+    if (textslot_offset >= 0x10000u) {
+        static int nlog;
+        static u8 empty[1];
+        if (nlog++ < 8) {
+            sysLogPrintf(LOG_WARNING, "D582: langGet stale bank: slot 0x%x bank %d offset 0x%x (bank ptr %p)",
+                         (unsigned) slotID, (int) (slotID >> 10), (unsigned) textslot_offset, (void *) textbank_ptr);
+        }
+        return empty;
+    }
+#endif
 
 #ifdef PORT
     /* D456: rebuild the result at pointer width; a u32 here truncates any arena address >= 4 GiB. */
