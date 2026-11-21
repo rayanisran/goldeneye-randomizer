@@ -1694,8 +1694,11 @@ int inputInit(void)
         if (mouseRawInput) {
             /* Feed the raw device delta straight through: no OS pointer
              * acceleration, no warp-based emulation. Must be set before
-             * relative mode is enabled. */
+             * relative mode is enabled. The system-scale hint only exists
+             * in SDL >= 2.26; distro SDL can be older (Ubuntu 22.04: 2.0.20). */
+#ifdef SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE   /* SDL >= 2.26 */
             SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");
+#endif
             SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
             sysLogPrintf(LOG_INFO, "input: raw mouse input (no OS pointer accel)");
         }
