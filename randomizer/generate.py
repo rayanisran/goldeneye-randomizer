@@ -35,8 +35,8 @@ CARRIERS = ("greyer", "same")    # race-code order: index 0 is the default
 CARRIER_LABELS = {"greyer": "Slightly greyer", "same": "Look the same"}
 PLACEMENTS = ("anywhere", "original")   # race-code bit 11
 PLACEMENT_LABELS = {"anywhere": "Anywhere", "original": "Original locations only"}
-MIRRORS = ("off", "on")                 # race-code bits 13-14
-MIRROR_LABELS = {"off": "Off", "on": "On"}
+MIRRORS = ("off", "on", "all")          # race-code bits 13-14 ("on": half the levels, picked by the seed)
+MIRROR_LABELS = {"off": "Off", "on": "50% of levels", "all": "Every level"}
 MIRROR_SHARE = 0.5             # mirror mode: each level's chance of being one of the mirrored ones
 DROP_AMMO = 5                  # default rounds in a gun a guard drops (race-code bits 15-19)
 DROP_AMMO_RANGE = range(1, 31)
@@ -659,6 +659,8 @@ def pick_new_locks(rng, settings, enabled, world):
 def pick_mirrored(seed, settings, enabled):
     """Mirror mode: which levels are mirrored, every time they're entered. From
     its own random stream, so turning it on doesn't move any item."""
+    if settings.mirror == "all":
+        return list(enabled)
     if settings.mirror != "on":
         return []
     rng = SeedRNG(seed ^ 0x4D4952524F52)
@@ -815,7 +817,7 @@ def main(argv=None):
                     help="easy: no tricks required; normal: known tricks may be required; advanced: + glitches")
     ap.add_argument("--containers", action="store_true", help="also hide items inside crates and barrels")
     ap.add_argument("--mirror", choices=MIRRORS, default="off",
-                    help="on: a set of levels picked by the seed is always mirrored (PC build)")
+                    help="on: about half the levels, picked by the seed; all: every level; always mirrored (PC build)")
     ap.add_argument("--drop-ammo", type=int, default=DROP_AMMO, choices=DROP_AMMO_RANGE, metavar="1-30",
                     help=f"rounds in a gun a guard drops (default {DROP_AMMO}, the same on every difficulty)")
     ap.add_argument("--show-handover", action="store_true",

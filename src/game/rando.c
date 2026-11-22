@@ -677,7 +677,7 @@ static void randoLoad(void)
     off += 1;
 
     if (!randoIoLoadSave(&s_save) || memcmp(s_save.magic, "GERV", 4) != 0
-        || (s_save.version != RANDO_SAVE_VERSION && s_save.version != 3)
+        || (s_save.version != RANDO_SAVE_VERSION && s_save.version != 4 && s_save.version != 3)
         || s_save.seedlo != s_seed.seedlo || s_save.seedhi != s_seed.seedhi)
     {
         /* new run: starting loadout from the seed, full health, no armour */

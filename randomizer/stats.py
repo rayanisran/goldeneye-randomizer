@@ -13,10 +13,10 @@ _TS = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)  (.*)$")
 _ENTER = re.compile(r"^--> Enter (.+?) \(")
 _LEAVE = re.compile(r"^<-- Leave (.+?): (\w+)(?:.*\[(\d+) s\])?")
 _DIED = re.compile(r"^\s*DIED on (.+)$")
-_FOUND = re.compile(r"^\s*FOUND item #\d+ on (.+?): (.*)$")
+_FOUND = re.compile(r"^\s*FOUND item #(\d+) on (.+?): (.*)$")
 _LETTER = re.compile(r"code letter keycard (\w)", re.I)
 _RUN = re.compile(r"\[run (\d+) s\]")   # the in-game run timer (from r6 on)
-_ARMOR = re.compile(r"^\s*picked up #\d+ on .+? (?:again )?\((?:respawned )?armor ")
+_ARMOR = re.compile(r"^\s*picked up #(\d+) on .+? (?:again )?\((?:respawned )?armor ")
 
 
 @dataclass
@@ -26,6 +26,7 @@ class LevelStats:
     visits: int = 0
     deaths: int = 0
     beaten: bool = False
+    items: list = field(default_factory=list)   # (seconds into the level's time, item #, "found" / "armor")
 
 
 @dataclass
@@ -68,6 +69,9 @@ def parse(text):
     def now():   # play seconds at the current line
         return done + (max((last_ts - enter_ts).total_seconds(), 0) if cur else 0)
 
+    def in_level():   # seconds into the current level's own time (all its visits)
+        return level(cur).seconds + max((last_ts - enter_ts).total_seconds(), 0)
+
     for line in text.splitlines():
         m = _TS.match(line)
         if not m:
@@ -89,12 +93,16 @@ def parse(text):
             level(e.group(1)).deaths += 1
         elif (e := _FOUND.match(body)):
             st.found += 1
-            if (l := _LETTER.search(e.group(2))):
+            if cur:
+                level(cur).items.append((in_level(), int(e.group(1)), "found"))
+            if (l := _LETTER.search(e.group(3))):
                 st.letters.append((l.group(1).upper(), now()))
                 if (r := _RUN.search(body)):
                     st.run_letters.append((l.group(1).upper(), float(r.group(1))))
-        elif _ARMOR.match(body):
+        elif (e := _ARMOR.match(body)):
             st.armor += 1
+            if cur:
+                level(cur).items.append((in_level(), int(e.group(1)), "armor"))
         elif "CRADLE BEATEN" in body:
             st.finished_at = now()
             if (r := _RUN.search(body)) and int(r.group(1)):

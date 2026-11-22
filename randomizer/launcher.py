@@ -56,6 +56,20 @@ def find_exe(root):
     return None
 
 
+def seed_items(b):
+    """{item #: (kind, short name)} from seed.bin, for the stats icons."""
+    out = {}
+    for i in range(struct.unpack_from("<H", b, 22)[0]):
+        rec = b[68 + i * 64: 68 + (i + 1) * 64]
+        name = rec[20:60].split(b"\0")[0].decode("ascii", "replace").split("\n")[0].strip()
+        for prefix in ("Picked up the ", "Picked up "):
+            if name.startswith(prefix):
+                name = name[len(prefix):]
+        name = name.rstrip(".")
+        out[i] = (rec[7], name[:1].upper() + name[1:])
+    return out
+
+
 def read_progress(rando, code):
     """(levels beaten, levels total, items found, items total, code letters found
     as "J A _ _ _" or None) from the save, or None."""
@@ -81,24 +95,27 @@ class StatsWindow(tk.Toplevel):
     """A finished (or ongoing) run at a glance: four numbers, the JANUS
     letters on a timeline, and time per level."""
 
-    W = 660
+    W = 680
     BG, INK, DIM, LINE = "#ffffff", "#1d1d1f", "#8a8a8e", "#e3e3e6"
-    GOLD, BAR, DONE, RED = "#d4a017", "#a9b4c2", "#4caf50", "#e0453a"
+    GOLD, BAR, DONE, RED = "#d4a017", "#c3ccd6", "#7cc47f", "#e0453a"
+    CLEAR, ARMOR, ITEM = "#3b7dd8", "#1f9e8f", "#4a5260"
+    ROW = 26
 
-    def __init__(self, master, run, found, total, code):
+    def __init__(self, master, run, found, total, code, items=None):
         super().__init__(master)
-        self.title("Run stats")
+        self.title("Seed stats")
+        self.items = items or {}
         self.resizable(False, False)
         self.configure(background=self.BG)
         levels_shown = sorted(run.levels.values(), key=lambda lv: -lv.seconds)
-        height = 300 + 22 * len(levels_shown) + 20
+        height = 300 + self.ROW * len(levels_shown) + 20
         c = tk.Canvas(self, width=self.W, height=height, background=self.BG, highlightthickness=0)
         c.pack()
         self.c = c
         x0, x1 = 28, self.W - 28
 
         # header
-        c.create_text(x0, 26, anchor="w", text="RUN COMPLETE" if run.finished_at is not None else "RUN SO FAR",
+        c.create_text(x0, 26, anchor="w", text="SEED COMPLETE" if run.finished_at is not None else "SEED IN PROGRESS",
                       fill=self.INK, font=("Segoe UI", 13, "bold"))
         c.create_text(x1, 26, anchor="e", text=code, fill=self.DIM, font=("Segoe UI", 9))
 
@@ -108,7 +125,8 @@ class StatsWindow(tk.Toplevel):
         letters, finish, span = run.timeline()
         tiles = [(runstats.clock(run.run_total), "time") if run.run_total else (runstats.clock(run.seconds), "play time"),
                  (str(run.deaths), "deaths"),
-                 (f"{pct}%" if pct is not None else str(found), "items"), (str(beaten), "levels beaten")]
+                 (f"{pct}%" if pct is not None else str(found), f"{found} / {total} items" if total else "items"),
+                 (str(beaten), "levels beaten")]
         tw = (x1 - x0) / len(tiles)
         for i, (big, small) in enumerate(tiles):
             cx = x0 + tw * i + tw / 2
@@ -145,31 +163,98 @@ class StatsWindow(tk.Toplevel):
             c.create_text(fx + 6, y + 28, anchor="w", text=runstats.clock(finish), fill=self.DONE,
                           font=("Segoe UI", 8, "bold"))
 
-        # time per level
-        y = 232
-        c.create_line(x0, y - 18, x1, y - 18, fill=self.LINE)
+        # time per level, with what was found there and when
+        y = 234
+        c.create_line(x0, y - 20, x1, y - 20, fill=self.LINE)
         longest = max((lv.seconds for lv in levels_shown), default=1) or 1
-        nx, bx0, bx1 = x0 + 74, x0 + 84, x1 - 120
+        nx, bx0, bx1 = x0 + 74, x0 + 84, x1 - 118
         for lv in levels_shown:
             c.create_text(nx, y, anchor="e", text=lv.name, fill=self.INK, font=("Segoe UI", 9))
             bw = max((bx1 - bx0) * lv.seconds / longest, 2)
-            c.create_rectangle(bx0, y - 5, bx0 + bw, y + 5, fill=self.DONE if lv.beaten else self.BAR, width=0)
-            c.create_text(bx0 + bw + 8, y, anchor="w", text=runstats.clock(lv.seconds), fill=self.DIM,
-                          font=("Segoe UI", 8))
+            c.create_rectangle(bx0, y - 4, bx0 + bw, y + 4, fill=self.DONE if lv.beaten else self.BAR, width=0)
+            last = -99
+            for t, num, how in sorted(lv.items):
+                ix = bx0 + bw * min(t / lv.seconds, 1.0) if lv.seconds else bx0
+                ix = max(ix, last + 11)                 # a burst of pickups sits side by side
+                self.icon(ix, y, num, how)
+                last = ix
+            tx = max(bx0 + bw, last + 6) + 8
+            c.create_text(tx, y, anchor="w", text=runstats.clock(lv.seconds), fill=self.DIM, font=("Segoe UI", 8))
             for d in range(lv.deaths):   # a red dot per death
-                dx = bx0 + bw + 48 + d * 9
+                dx = tx + 40 + d * 9
                 c.create_oval(dx - 3, y - 3, dx + 3, y + 3, fill=self.RED, width=0)
-            y += 22
+            y += self.ROW
+
         # legend, one line
-        ly = y + 6
-        c.create_rectangle(x0, ly - 4, x0 + 10, ly + 4, fill=self.DONE, width=0)
-        c.create_text(x0 + 16, ly, anchor="w", text="beaten", fill=self.DIM, font=("Segoe UI", 8))
-        c.create_oval(x0 + 70, ly - 3, x0 + 76, ly + 3, fill=self.RED, width=0)
-        c.create_text(x0 + 82, ly, anchor="w", text="death", fill=self.DIM, font=("Segoe UI", 8))
+        ly, lx = y + 4, x0
+        for draw, label in ((lambda x: c.create_rectangle(x, ly - 4, x + 12, ly + 4, fill=self.DONE, width=0), "beaten"),
+                            (lambda x: c.create_oval(x + 3, ly - 3, x + 9, ly + 3, fill=self.RED, width=0), "death"),
+                            (lambda x: self.glyph(x + 6, ly, "letter", "J"), "code letter"),
+                            (lambda x: self.glyph(x + 6, ly, "clearance"), "clearance"),
+                            (lambda x: self.glyph(x + 6, ly, "item"), "item"),
+                            (lambda x: self.glyph(x + 6, ly, "armor"), "body armor")):
+            draw(lx)
+            c.create_text(lx + 17, ly, anchor="w", text=label, fill=self.DIM, font=("Segoe UI", 8))
+            lx += 34 + 6 * len(label)
         c.configure(height=ly + 18)
+
+        # the name of what's under the pointer
+        self.tip_bg = c.create_rectangle(0, 0, 0, 0, fill=self.INK, width=0, state="hidden")
+        self.tip = c.create_text(0, 0, anchor="w", text="", fill="#ffffff", font=("Segoe UI", 8), state="hidden")
         if master is not None and master.winfo_viewable():
             self.transient(master)
             self.geometry(f"+{master.winfo_rootx() + 60}+{master.winfo_rooty() + 30}")
+
+
+    def kind_of(self, num, how):
+        kind, name = self.items.get(num, (None, ""))
+        if how == "armor":
+            return "armor", "Body armor"
+        if kind == 6:
+            return "letter", name
+        if kind == 5:
+            return "clearance", name
+        return "item", name
+
+    def glyph(self, x, y, kind, letter=""):
+        c = self.c
+        if kind == "letter":
+            ids = [c.create_oval(x - 7, y - 7, x + 7, y + 7, fill=self.GOLD, outline=self.BG, width=1),
+                   c.create_text(x, y, text=letter, fill="#ffffff", font=("Segoe UI", 7, "bold"))]
+        elif kind == "clearance":
+            ids = [c.create_rectangle(x - 5, y - 6, x + 5, y + 6, fill=self.CLEAR, outline=self.BG, width=1),
+                   c.create_line(x - 2, y - 2, x + 3, y - 2, fill="#ffffff"),
+                   c.create_line(x - 2, y + 1, x + 3, y + 1, fill="#ffffff")]
+        elif kind == "armor":
+            ids = [c.create_polygon(x - 5, y - 6, x + 5, y - 6, x + 5, y, x, y + 7, x - 5, y,
+                                    fill=self.ARMOR, outline=self.BG, width=1)]
+        else:
+            ids = [c.create_polygon(x, y - 6, x + 6, y, x, y + 6, x - 6, y, fill=self.ITEM, outline=self.BG, width=1)]
+        return ids
+
+    def icon(self, x, y, num, how):
+        kind, name = self.kind_of(num, how)
+        letter = name.strip()[-1:].upper() if kind == "letter" else ""
+        for i in self.glyph(x, y, kind, letter):
+            self.c.tag_bind(i, "<Enter>", lambda e, n=name, x=x, y=y: self.show_tip(n, x, y))
+            self.c.tag_bind(i, "<Leave>", lambda e: self.hide_tip())
+
+    def show_tip(self, text, x, y):
+        c = self.c
+        c.itemconfigure(self.tip, text=text, state="normal")
+        c.coords(self.tip, x + 10, y - 16)
+        bx0, by0, bx1, by1 = c.bbox(self.tip)
+        if bx1 > self.W - 6:   # keep it inside the window
+            c.move(self.tip, self.W - 6 - bx1, 0)
+            bx0, by0, bx1, by1 = c.bbox(self.tip)
+        c.coords(self.tip_bg, bx0 - 5, by0 - 2, bx1 + 5, by1 + 2)
+        c.itemconfigure(self.tip_bg, state="normal")
+        c.tag_raise(self.tip_bg)
+        c.tag_raise(self.tip)
+
+    def hide_tip(self):
+        self.c.itemconfigure(self.tip, state="hidden")
+        self.c.itemconfigure(self.tip_bg, state="hidden")
 
 
 class ProgressWindow(tk.Toplevel):
@@ -365,7 +450,7 @@ class Launcher(tk.Tk):
         for i, key in enumerate(gen.CARRIERS):
             ttk.Radiobutton(box, text=gen.CARRIER_LABELS[key], value=key, variable=self.carriers).grid(
                 row=2, column=1 + i, sticky="w", padx=(0, 8))
-        ttk.Checkbutton(box, text="Show the run timer in game", variable=self.show_timer).grid(
+        ttk.Checkbutton(box, text="Display in-game timer", variable=self.show_timer).grid(
             row=3, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
 
         for col in (left, right):
@@ -435,7 +520,7 @@ class Launcher(tk.Tk):
         run = runstats.parse(log.read_text(encoding="utf-8", errors="replace"))
         prog = read_progress(self.rando, code)
         found, total = (prog[2], prog[3]) if prog else (run.found, 0)
-        return run, found, total, code
+        return run, found, total, code, seed_items(seed_path.read_bytes())
 
     def open_stats(self):
         data = self.run_stats()
