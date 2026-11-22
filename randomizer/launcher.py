@@ -73,6 +73,75 @@ def read_progress(rando, code):
     return beaten, total, found, placed, code
 
 
+class ProgressWindow(tk.Toplevel):
+    """A bar, the percentage and the time left; nothing else."""
+
+    def __init__(self, master, title):
+        super().__init__(master)
+        self.title(title)
+        self.resizable(False, False)
+        self.protocol("WM_DELETE_WINDOW", lambda: None)   # runs to the end
+        self.bar = ttk.Progressbar(self, length=320, maximum=1000)
+        self.bar.grid(row=0, column=0, padx=16, pady=(16, 6))
+        self.text = tk.StringVar(value="0%")
+        ttk.Label(self, textvariable=self.text).grid(row=1, column=0, pady=(0, 14))
+        self.start, self.last = None, 0.0
+        if master is not None and master.winfo_viewable():
+            self.transient(master)
+            self.geometry(f"+{master.winfo_rootx() + 120}+{master.winfo_rooty() + 120}")
+            self.grab_set()
+
+    def set(self, fraction):
+        import time
+        fraction = max(self.last, min(fraction, 1.0))
+        self.last = fraction
+        now = time.monotonic()
+        if self.start is None and fraction > 0:
+            self.start = (now, fraction)
+        self.bar["value"] = fraction * 1000
+        text = f"{fraction * 100:.0f}%"
+        if self.start and fraction < 1.0 and now - self.start[0] > 1.0 and fraction > self.start[1]:
+            left = (now - self.start[0]) / (fraction - self.start[1]) * (1.0 - fraction)
+            text += f"  -  about {left:.0f} s left" if left < 90 else f"  -  about {left / 60:.0f} min left"
+        self.text.set(text)
+
+
+def finish_update(root, pid):
+    """Run by the freshly downloaded launcher: replace the old copy's files,
+    then open it (see updater.py)."""
+    staged = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
+    app = tk.Tk()
+    app.withdraw()
+    bar = ProgressWindow(app, f"Updating to {RELEASE}")
+    progress, out = [0.0], {}
+
+    def work():
+        try:
+            updater.wait_for_exit(pid)
+            updater.apply(staged, root, lambda f: progress.__setitem__(0, f))
+        except Exception as e:
+            out["error"] = e
+
+    t = threading.Thread(target=work, daemon=True)
+    t.start()
+
+    def poll():
+        bar.set(progress[0])
+        if t.is_alive():
+            app.after(100, poll)
+            return
+        if "error" in out:
+            messagebox.showerror(APP_TITLE, f"The update didn't work: {out['error']}", parent=bar)
+        # the updated copy, or the old one untouched when it failed
+        exe = updater.launcher_in(root)
+        if exe:
+            updater.start_detached([exe, "--cleanup", Path(root) / updater.STAGE_DIR], cwd=root)
+        app.destroy()
+
+    app.after(100, poll)
+    app.mainloop()
+
+
 class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -271,47 +340,38 @@ class Launcher(tk.Tk):
                 self.update_text.set(f"New update available: {rel.tag}")
                 self.update_label.configure(foreground=ALERT)
                 self.update_button.configure(text=f"Get {rel.tag}", style="Update.TButton")
+                if os.environ.get("GE_RANDO_UPDATE_AUTOCLICK"):   # testing: updater.py GE_RANDO_UPDATE_FEED
+                    self.get_update()
             else:
                 self.update_text.set(f"Version {RELEASE}" if quiet else f"Version {RELEASE}: up to date")
 
         self.run_in_background(updater.latest, done)
 
     def get_update(self):
+        """One click: download with a progress bar, then the new version
+        replaces this one in the same folder and opens."""
         rel = self.update_release
         if not getattr(sys, "frozen", False):
-            # running from the source code: git pull or a new download is the update
-            if messagebox.askyesno(APP_TITLE, f"{rel.tag} is out. This copy runs from the source code, so update "
-                                              "it with git pull or a new download.\n\nOpen the releases page?"):
-                webbrowser.open(rel.page)
+            webbrowser.open(rel.page)   # running from the source code: nothing to replace
             return
-        size = f" ({rel.size / 1e6:.0f} MB)" if rel.size else ""
-        if not messagebox.askyesno(APP_TITLE, f"Download GoldenEye Randomizer {rel.tag}{size}?\n\n"
-                                              "It goes in a new folder next to this one, with your ROM, game "
-                                              "settings and seeds copied in. This copy stays as it is."):
+        if self.game and self.game.poll() is None:
+            messagebox.showinfo(APP_TITLE, "Close the game first, then click Get again.")
             return
-        self.update_button.state(["disabled"])
+        bar = ProgressWindow(self, f"Updating to {rel.tag}")
         progress = [0.0]
 
-        def tick():
-            self.update_text.set(f"Downloading {rel.tag}... {progress[0] * 100:.0f}%")
-
-        def done(new_root, err):
-            self.update_button.state(["!disabled"])
+        def done(staged, err):
             if err is not None:
-                self.update_text.set(f"New update available: {rel.tag}")
+                bar.destroy()
                 messagebox.showerror(APP_TITLE, f"The update didn't work: {err}")
                 return
-            self.update_text.set(f"{rel.tag} is ready")
-            exe = updater.launcher_in(new_root)
-            if exe is None:
-                messagebox.showinfo(APP_TITLE, f"{rel.tag} is in:\n{new_root}")
-            elif messagebox.askyesno(APP_TITLE, f"{rel.tag} is ready in:\n{new_root}\n\n"
-                                                "Open it now? This window closes."):
-                subprocess.Popen([str(exe)], cwd=str(new_root))
-                self.destroy()
+            bar.set(1.0)
+            exe = updater.launcher_in(staged)
+            updater.start_detached([exe, "--finish-update", self.root, os.getpid()], cwd=staged)
+            self.destroy()
 
-        self.run_in_background(lambda: updater.install(rel, self.root, progress=lambda f: progress.__setitem__(0, f)),
-                               done, tick)
+        self.run_in_background(lambda: updater.stage(rel, self.root, lambda f: progress.__setitem__(0, f)),
+                               done, lambda: bar.set(progress[0]))
 
     def build_timer_box(self):
         s = wsplit.load_settings(self.rando)
@@ -533,6 +593,11 @@ def main():
     if len(sys.argv) > 2 and sys.argv[1] == "--selftest":
         selftest(sys.argv[2])
         return
+    if len(sys.argv) > 3 and sys.argv[1] == "--finish-update":
+        finish_update(Path(sys.argv[2]), int(sys.argv[3]))
+        return
+    if len(sys.argv) > 2 and sys.argv[1] == "--cleanup":
+        threading.Thread(target=updater.cleanup, args=(sys.argv[2],), daemon=True).start()
     Launcher().mainloop()
 
 

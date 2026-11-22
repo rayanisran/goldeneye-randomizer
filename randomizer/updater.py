@@ -1,10 +1,13 @@
-"""Update check for the launcher.
+"""Update check and in-place update for the launcher.
 
 Looks for the newest GitHub release of the randomizer that has a package for
-this platform (GoldenEye-Randomizer-rN-win64.zip or -linux.tar.gz) and, when
-it is newer than this copy (version.RELEASE), downloads it, checks it against
-its .sha256 file, unpacks it next to this copy and copies the player's ROM,
-game settings and seeds into it. This copy is left as it was.
+this platform (GoldenEye-Randomizer-rN-win64.zip or -linux.tar.gz). When it
+is newer than this copy (version.RELEASE), the launcher downloads it, checks
+it against its .sha256 file and replaces its own folder's program files with
+it, keeping the player's data/ (ROM, saves, settings, seeds), then restarts.
+
+GE_RANDO_UPDATE_FEED=<url> (a file:// JSON in the releases-API shape works)
+replaces the GitHub address, for testing an update without publishing one.
 """
 
 import hashlib
@@ -15,7 +18,6 @@ import shutil
 import ssl
 import subprocess
 import tarfile
-import tempfile
 import urllib.error
 import urllib.request
 import zipfile
@@ -25,7 +27,7 @@ from pathlib import Path
 from .version import RELEASE
 
 REPO = "rayanisran/goldeneye-randomizer"
-API = f"https://api.github.com/repos/{REPO}/releases?per_page=30"
+API = os.environ.get("GE_RANDO_UPDATE_FEED") or f"https://api.github.com/repos/{REPO}/releases?per_page=30"
 PAGE = f"https://github.com/{REPO}/releases"
 AGENT = "goldeneye-randomizer-launcher"
 
@@ -90,6 +92,23 @@ def _curl(url, timeout, out=None):
     return subprocess.run(cmd, check=True, capture_output=True, creationflags=flags).stdout
 
 
+def _curl_download(url, dest, size, progress):
+    """The system curl into dest, with progress from the growing file's size."""
+    import time
+    exe = shutil.which("curl")
+    if exe is None:
+        raise OSError("no way to make a secure connection on this machine")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    proc = subprocess.Popen([exe, "-fsSL", "-A", AGENT, "-o", str(dest), url],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, creationflags=flags)
+    while proc.poll() is None:
+        if progress and size and Path(dest).exists():
+            progress(min(Path(dest).stat().st_size / size, 1.0))
+        time.sleep(0.2)
+    if proc.returncode:
+        raise OSError(f"download failed ({proc.stderr.read().decode(errors='replace').strip()})")
+
+
 def fetch(url, timeout=15):
     try:
         with _open(url, timeout) as r:
@@ -120,7 +139,7 @@ def download(url, dest, size=0, progress=None, timeout=30):
     except urllib.error.URLError as e:
         if not isinstance(getattr(e, "reason", None), ssl.SSLError):
             raise
-    _curl(url, timeout, out=dest)   # no progress this way
+    _curl_download(url, dest, size, progress)
     with open(dest, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             digest.update(chunk)
@@ -164,57 +183,151 @@ def _safe_members(tar, dest):
     return tar.getmembers()
 
 
-def install(rel, current_root, progress=None):
-    """Download rel, unpack it next to current_root and carry the player's files
-    over. Returns the new folder. progress(fraction) is called while downloading."""
-    parent = Path(current_root).resolve().parent
-    tmp = Path(tempfile.mkdtemp(prefix="ge-rando-update-", dir=parent))
-    try:
-        archive = tmp / rel.asset
-        got = download(rel.url, archive, rel.size, progress)
-        if rel.sha_url:
-            expected = fetch(rel.sha_url).decode("utf-8", "replace").split()[0].lower()
-            if got != expected:
-                raise ValueError("the download is damaged (checksum mismatch); try again")
-
-        unpacked = tmp / "unpacked"
-        unpacked.mkdir()
-        if rel.asset.endswith(".zip"):
-            with zipfile.ZipFile(archive) as z:
-                z.extractall(unpacked)
-        else:
-            with tarfile.open(archive) as t:
-                t.extractall(unpacked, members=_safe_members(t, unpacked))
-        tops = [p for p in unpacked.iterdir()]
-        top = tops[0] if len(tops) == 1 and tops[0].is_dir() else unpacked
-
-        new_root = parent / (top.name if top is not unpacked else rel.asset.split(".")[0])
-        if new_root.exists():
-            new_root = parent / f"{new_root.name}-{os.getpid()}"
-        shutil.move(str(top), str(new_root))
-        carry_over(Path(current_root), new_root)
-        return new_root
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
 
 
-def carry_over(old, new):
-    """The player's ROM, game settings and randomizer seeds/saves; the new copy
-    builds its own game files from the ROM on first start."""
-    old_data, new_data = old / "data", new / "data"
-    new_data.mkdir(exist_ok=True)
-    if not old_data.is_dir():
+# ------------------------------------------------------------ in-place update
+#
+# 1. stage(): the running launcher downloads the package into <root>/.update,
+#    checks it and unpacks it there.
+# 2. It starts the staged launcher with --finish-update <root> <pid> and quits.
+# 3. The staged launcher waits for it to exit, apply()s its own folder over
+#    <root> (the player's data stays) and starts <root>'s launcher with
+#    --cleanup, which deletes .update once the staged one has exited.
+
+STAGE_DIR = ".update"
+PLAYER_DATA_RESET = ("pccg-*", "pcmodels-*", "ge007.shaders")   # rebuilt from the ROM / by the game
+
+
+def stage(rel, root, progress=None):
+    """Download, verify and unpack rel under root/.update. progress(fraction)
+    covers the download (0-0.95) and unpacking (to 1.0). Returns the unpacked
+    package folder."""
+    st = Path(root).resolve() / STAGE_DIR
+    shutil.rmtree(st, ignore_errors=True)
+    st.mkdir(parents=True)
+    archive = st / rel.asset
+    got = download(rel.url, archive, rel.size, (lambda f: progress(f * 0.95)) if progress else None)
+    if rel.sha_url:
+        expected = fetch(rel.sha_url).decode("utf-8", "replace").split()[0].lower()
+        if got != expected:
+            raise ValueError("the download is damaged; try again")
+    unpacked = st / "new"
+    unpacked.mkdir()
+    if rel.asset.endswith(".zip"):
+        with zipfile.ZipFile(archive) as z:
+            z.extractall(unpacked)
+    else:
+        with tarfile.open(archive) as t:
+            t.extractall(unpacked, members=_safe_members(t, unpacked))
+    archive.unlink()
+    if progress:
+        progress(1.0)
+    tops = list(unpacked.iterdir())
+    return tops[0] if len(tops) == 1 and tops[0].is_dir() else unpacked
+
+
+def wait_for_exit(pid, timeout=30.0):
+    """Block until process pid has exited (or timeout)."""
+    import time
+    end = time.time() + timeout
+    if os.name == "nt":
+        import ctypes
+        SYNCHRONIZE = 0x00100000
+        h = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, int(pid))
+        if h:
+            ctypes.windll.kernel32.WaitForSingleObject(h, int(timeout * 1000))
+            ctypes.windll.kernel32.CloseHandle(h)
         return
-    for f in old_data.iterdir():
-        if f.is_file() and (f.suffix.lower() in (".z64", ".n64", ".v64") or f.name == "ge007.ini"):
-            if not (new_data / f.name).exists():
-                shutil.copy2(f, new_data / f.name)
-    if (old_data / "rando").is_dir():
-        shutil.copytree(old_data / "rando", new_data / "rando", dirs_exist_ok=True)
+    while time.time() < end:
+        try:
+            os.kill(int(pid), 0)
+        except OSError:
+            return
+        time.sleep(0.1)
+
+
+def _copy_retrying(src, dst, tries=50):
+    import time
+    for i in range(tries):
+        try:
+            shutil.copy2(src, dst)
+            return
+        except PermissionError:   # Windows: a file still open for a moment
+            if i == tries - 1:
+                raise
+            time.sleep(0.2)
+
+
+def _check_writable(paths, timeout=20.0):
+    """Every program file about to be replaced can be written (the old launcher
+    has fully exited, the game isn't running), so nothing is half-replaced."""
+    import time
+    end = time.time() + timeout
+    for dst in paths:
+        if not dst.is_file() or dst.is_symlink():
+            continue
+        while True:
+            try:
+                with open(dst, "r+b"):
+                    break
+            except PermissionError:
+                if time.time() > end:
+                    raise RuntimeError("the game or the launcher is still open; close it and try again")
+                time.sleep(0.25)
+
+
+def apply(staged, root, progress=None):
+    """Copy the unpacked package over root. Program files are replaced; in
+    data/ only files the player doesn't have yet are added (ROM, saves,
+    settings, seeds stay), and the files built from the ROM are removed so the
+    new version builds its own on first start (a few seconds)."""
+    staged, root = Path(staged), Path(root)
+    files = [f for f in staged.rglob("*") if f.is_file() or f.is_symlink()]
+    _check_writable([root / f.relative_to(staged) for f in files
+                     if f.relative_to(staged).parts[0] != "data"])
+    for n, f in enumerate(files):
+        rel = f.relative_to(staged)
+        dst = root / rel
+        if rel.parts[0] == "data" and dst.exists():
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if f.is_symlink():
+            if dst.is_symlink() or dst.exists():
+                dst.unlink()
+            os.symlink(os.readlink(f), dst)
+        else:
+            _copy_retrying(f, dst)
+        if progress:
+            progress((n + 1) / len(files))
+    for pattern in PLAYER_DATA_RESET:
+        for old in (root / "data").glob(pattern):
+            if old.is_dir():
+                shutil.rmtree(old, ignore_errors=True)
+            else:
+                old.unlink(missing_ok=True)
+
+
+def cleanup(stage_dir, timeout=60.0):
+    """Delete .update once the staged launcher has let go of it."""
+    import time
+    end = time.time() + timeout
+    while time.time() < end:
+        shutil.rmtree(stage_dir, ignore_errors=True)
+        if not Path(stage_dir).exists():
+            return
+        time.sleep(0.5)
 
 
 def launcher_in(root):
     for name in ("GoldenEye Randomizer.exe", "GoldenEye Randomizer"):
-        if (root / name).exists():
-            return root / name
+        if (Path(root) / name).exists():
+            return Path(root) / name
     return None
+
+
+def start_detached(args, cwd):
+    flags = 0
+    if os.name == "nt":
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    return subprocess.Popen([str(a) for a in args], cwd=str(cwd), creationflags=flags,
+                            start_new_session=os.name != "nt", close_fds=True)

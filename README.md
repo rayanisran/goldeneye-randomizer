@@ -222,11 +222,13 @@ Seed files land in `data/rando/` (`seed.bin` for the game,
 
 **Updates.** From r6 on, the launcher checks GitHub for a newer release when
 it starts. If there is one, the bottom-right corner turns red: *New update
-available*. Clicking *Get rN* downloads it, checks its checksum, unpacks it
-into a new folder next to the current one and copies your ROM, game settings
-and seeds into it, then offers to open it. The old folder stays as it was.
-*Check for updates* asks again at any time. Copies older than r6 don't have
-this: download the new release by hand once.
+available*. One click on *Get rN* does the rest: a progress bar with the time
+left while it downloads (checked against the release's checksum), then the
+new version replaces the old one in the same folder and opens. The ROM,
+saves, game settings and seeds stay; the game rebuilds its files from the ROM
+on the next start (a few seconds). Close the game before updating. *Check for
+updates* asks again at any time. Copies older than r6 don't have this:
+download r6 by hand once.
 
 ## Building a Windows release
 
