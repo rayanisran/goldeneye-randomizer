@@ -3362,6 +3362,30 @@ static void tipSelfCheck(void);
  * previous page (closes on the first), R / L / I close it on any page. */
 extern int randoMenuItemNames(const char **names, int max);
 extern int randoMenuCodeLetters(char *code);
+extern int randoRunTimer(char *out, int size);
+
+/* The run timer, top-left, when the launcher asks for it (GE_RANDO_TIMER=1):
+ * white while running, green once Cradle is beaten. */
+static int randoTimerWanted(char *out, int size)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char *e = getenv("GE_RANDO_TIMER");
+        on = e && atoi(e) != 0;
+    }
+    return on ? randoRunTimer(out, size) : 0;
+}
+
+static Gfx *randoTimerEmit(Gfx *gdl, const char *text, int state)
+{
+    const u32 shade = 0x000000d0, ink = state == 2 ? 0x40ff60ff : 0xf4f4f4ff;
+    const s32 x = 10, y = 8;
+    gdl = drawBody(gdl, x - 1, y, text, shade);
+    gdl = drawBody(gdl, x + 1, y, text, shade);
+    gdl = drawBody(gdl, x, y - 1, text, shade);
+    gdl = drawBody(gdl, x, y + 1, text, shade);
+    return drawBody(gdl, x, y, text, ink);
+}
 static int s_randoList = 0;    /* page shown, 1-based; 0 = closed */
 static int s_randoPages = 1;   /* pages at the last draw */
 
@@ -3499,10 +3523,12 @@ static Gfx *overlayEmitLocked(void)
         int fps = s_showFps && s_fpsText[0];
 #ifdef GE_RANDOMIZER
         int list = randoListWanted();
+        char runtxt[24];
+        int runt = list ? 0 : randoTimerWanted(runtxt, sizeof(runtxt));
 #else
-        int list = 0;
+        int list = 0, runt = 0;
 #endif
-        if (!fps && !list) {
+        if (!fps && !list && !runt) {
             return NULL;   /* nothing appended -> golden dumps byte-identical */
         }
         /* D213: FPS-only mini DL (top-right), panel closed. */
@@ -3520,6 +3546,11 @@ static Gfx *overlayEmitLocked(void)
         }
 #endif
         fgdl = microcode_constructor(fgdl);
+#ifdef GE_RANDOMIZER
+        if (runt) {
+            fgdl = randoTimerEmit(fgdl, runtxt, runt);
+        }
+#endif
         if (fps) {
             fgdl = drawTextR(fgdl, fw - 6, 6, s_fpsText, 0x40ff60ff);
         }

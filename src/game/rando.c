@@ -82,7 +82,7 @@ static const char *s_levelNames[] = {
 static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "LTK", "DLTK" };
 
 #define RANDO_VERSION       1   /* seed file */
-#define RANDO_SAVE_VERSION  4   /* 4: best times; a version 3 save loads without them */
+#define RANDO_SAVE_VERSION  5   /* 5: run timer; 4: best times (older saves load without them) */
 #define RANDO_LEVELS        20
 #define RANDO_MAX_ITEMS     256
 #define RANDO_MAX_LOADOUT   32
@@ -201,7 +201,16 @@ typedef struct RandoSave {
     s8   equipped[2];                   /* right, left held at the end of the last level */
     u8   pad[2];
     u16  besttime[RANDO_LEVELS];        /* seconds, 0 = not finished yet (version 4) */
+    u32  runms;                         /* run timer, ms (version 5) */
+    u32  runflags;                      /* RUN_* */
 } RandoSave;
+
+/* Run timer: starts when the run's first level starts, counts real time while
+ * the game is open (menus included, game closed not), stops when Cradle is
+ * beaten. RUN_NOTIMER: a run from before the timer existed, none to show. */
+#define RUN_STARTED   0x01
+#define RUN_FINISHED  0x02
+#define RUN_NOTIMER   0x04
 
 static struct {
     s32 tried, loaded;
@@ -278,6 +287,58 @@ static s32 randoSaveMissing(void);   /* N64: no 16K EEPROM, progress can't be ke
 #endif
 static s32 randoIoLoadSave(RandoSave *save);
 static void randoIoWriteSave(const RandoSave *save);
+#ifdef PORT
+static void randoIoSaveTimer(u32 runms, u32 runflags);
+#endif
+
+/* ------------------------------------------------------------ run timer */
+
+static u64 s_timerBase;   /* clock (us) up to which s_save.runms is counted */
+static s32 s_timerLive;   /* counting this session */
+
+static u64 nowUs(void)
+{
+#ifdef PORT
+    return (u64)osGetTime();                    /* the port's clock is in microseconds */
+#else
+    return OS_CYCLES_TO_USEC(osGetTime());
+#endif
+}
+
+/* add the time since the last fold to s_save.runms */
+static void timerFold(void)
+{
+    u64 now, ms;
+
+    if (!s_timerLive)
+    {
+        return;
+    }
+    now = nowUs();
+    ms = (now - s_timerBase) / 1000;
+    s_save.runms += (u32)ms;
+    s_timerBase += ms * 1000;
+}
+
+static void timerStart(void)
+{
+    s_timerBase = nowUs();
+    s_timerLive = TRUE;
+}
+
+#ifdef PORT
+static void timerAtExit(void)
+{
+    /* closing the game: keep the time counted since the last save write */
+    if (s_timerLive)
+    {
+        timerFold();
+        randoIoSaveTimer(s_save.runms, s_save.runflags);
+    }
+}
+#endif
+
+#define saveNow() (timerFold(), randoIoWriteSave(&s_save))
 
 /* ------------------------------------------------------------ helpers */
 
@@ -643,9 +704,22 @@ static void randoLoad(void)
             }
         }
 
-        randoIoWriteSave(&s_save);
+        saveNow();
+    }
+    if (s_save.version != RANDO_SAVE_VERSION)
+    {
+        /* a run saved before the run timer: no time to show for it */
+        s_save.runms = 0;
+        s_save.runflags = (s_save.beaten || s_save.found[0] || s_save.found[1]) ? RUN_NOTIMER : 0;
     }
     s_save.version = RANDO_SAVE_VERSION;   /* a run saved before best times: none yet */
+    if ((s_save.runflags & (RUN_STARTED | RUN_FINISHED | RUN_NOTIMER)) == RUN_STARTED)
+    {
+        timerStart();   /* a run in progress: the clock runs while the game is open */
+    }
+#ifdef PORT
+    atexit(timerAtExit);
+#endif
 
     s_seed.loaded = TRUE;
     {
@@ -1311,6 +1385,33 @@ int randoMenuItemNames(const char **names, int max)
     return n;
 }
 
+int randoRunTimer(char *out, int size)
+{
+    /* the run timer as "1:02:03.4" / "2:03.4": 0 = nothing to show, 1 running,
+     * 2 finished (port optionsoverlay.c draws it) */
+    u32 ms, h, m, sec, tenth;
+
+    if (!randoActive() || !(s_save.runflags & RUN_STARTED) || (s_save.runflags & RUN_NOTIMER))
+    {
+        return 0;
+    }
+    timerFold();
+    ms = s_save.runms;
+    h = ms / 3600000u;
+    m = ms / 60000u % 60u;
+    sec = ms / 1000u % 60u;
+    tenth = ms / 100u % 10u;
+    if (h)
+    {
+        sprintf(out, "%u:%02u:%02u.%u", h, m, sec, tenth);
+    }
+    else
+    {
+        sprintf(out, "%u:%02u.%u", m, sec, tenth);
+    }
+    return (s_save.runflags & RUN_FINISHED) ? 2 : 1;
+}
+
 int randoMenuCodeLetters(char *code)
 {
     /* Menu item list: the code word with the letters found so far and '_'
@@ -1476,7 +1577,7 @@ char *randoOnPickup(ObjectRecord *obj)
                 if (!itemFound(s_tracked[i].item))
                 {
                     bitSet(s_save.found, s_tracked[i].item);
-                    randoIoWriteSave(&s_save);
+                    saveNow();
                     RANDOLOG("    picked up #%d on %s (%s%.2f)\n", s_tracked[i].item, s_levelNames[s_level],
                              obj->type == PROPDEF_ARMOUR ? "armor " : "gun ",
                              obj->type == PROPDEF_ARMOUR ? ((BodyArmourRecord *)obj)->amount : 0.0f);
@@ -1520,8 +1621,10 @@ char *randoOnPickup(ObjectRecord *obj)
                     /* add to what's held (give_cur_player_ammo would replace it) */
                     add_ammo_to_inventory(it->ammotype, it->ammo, FALSE, FALSE);
                 }
-                randoIoWriteSave(&s_save);
-                RANDOLOG("    FOUND item #%d on %s: %s\n", s_tracked[i].item, s_levelNames[s_level], it->name);
+                saveNow();
+                timerFold();
+                RANDOLOG("    FOUND item #%d on %s: %s [run %d s]\n", s_tracked[i].item, s_levelNames[s_level], it->name,
+                         (int)(s_save.runms / 1000));
                 if (it->kind == KIND_CRADLEKEY || it->kind == KIND_LETTER)
                 {
                     RANDOLOG("    (GoldenEye Key %s, %d of %d code letters; Cradle %s)\n",
@@ -1669,6 +1772,13 @@ void randoTick(void)
         s32 i;
 
         s_playStarted = TRUE;
+        if (!(s_save.runflags & (RUN_STARTED | RUN_NOTIMER)))
+        {
+            s_save.runflags |= RUN_STARTED;   /* the run's first level: the timer starts */
+            s_save.runms = 0;
+            timerStart();
+            RANDOLOG("    run timer started\n");
+        }
         for (i = 0; i < s_ntracked; i++)
         {
             ObjectRecord *rec = s_tracked[i].rec;
@@ -1713,7 +1823,7 @@ void randoTick(void)
     commit(FALSE);
     if (memcmp(&before, &s_save, sizeof(s_save)) != 0)
     {
-        randoIoWriteSave(&s_save);
+        saveNow();
     }
 }
 
@@ -1750,10 +1860,12 @@ void randoStageLoad(s32 stage)
         /* health and armour carry over on completion and on quitting;
          * dying returns you with what you came in with */
         commit(s_completed || !s_died);
-        randoIoWriteSave(&s_save);
-        RANDOLOG("<-- Leave %s: %s\n", s_levelNames[s_level],
+        saveNow();
+        /* [N s]: the game's own mission timer for the visit (the launcher's stats) */
+        RANDOLOG("<-- Leave %s: %s [%d s]\n", s_levelNames[s_level],
                  s_completed ? "COMPLETED" : s_died ? "died (health stays as it was on entry)"
-                                                    : "left without completing (health and armour kept)");
+                                                    : "left without completing (health and armour kept)",
+                 (int)(getMissiontimer() / 60));
         logInventory("kept");
     }
     s_level = -1;
@@ -1773,6 +1885,12 @@ s32 randoStageCompleted(s32 levelid)
     }
 
     before = levelid == s_level ? s_cradleOpenAtEntry : cradleUnlocked();
+    if (levelid == SP_LEVEL_CRADLE && s_timerLive)
+    {
+        timerFold();
+        s_timerLive = FALSE;                  /* the run is done: the timer stops */
+        s_save.runflags |= RUN_FINISHED;
+    }
     if (levelid == s_level)
     {
         snapshot();
@@ -1780,7 +1898,7 @@ s32 randoStageCompleted(s32 levelid)
         commit(TRUE);
     }
     bitSet(&s_save.beaten, levelid);
-    randoIoWriteSave(&s_save);
+    saveNow();
 
     {
         char open[256] = "";
@@ -1808,7 +1926,7 @@ s32 randoStageCompleted(s32 levelid)
         }
         if (levelid == SP_LEVEL_CRADLE)
         {
-            RANDOLOG("*** CRADLE BEATEN: seed finished\n");
+            RANDOLOG("*** CRADLE BEATEN: seed finished [run %d s]\n", (int)(s_save.runms / 1000));
         }
     }
 
@@ -2109,7 +2227,7 @@ void randoRecordTime(s32 levelid, s32 seconds)
     if (s_save.besttime[levelid] == 0 || seconds < s_save.besttime[levelid])
     {
         s_save.besttime[levelid] = (u16)(seconds > 0xFFFF ? 0xFFFF : seconds);
-        randoIoWriteSave(&s_save);
+        saveNow();
     }
 }
 
@@ -2189,9 +2307,23 @@ static s32 randoIoLoadSave(RandoSave *save)
     memset(save, 0, sizeof(*save));
     n = fsRead(f, save, sizeof(*save));
     fsClose(f);
-    /* a version 3 save ends where the best times begin */
+    /* a version 3 save ends where the best times begin, a version 4 one where the timer does */
     return n == (s32)sizeof(*save)
+        || (n == (s32)((u8 *)&save->runms - (u8 *)save) && save->version == 4)
         || (n == (s32)((u8 *)save->besttime - (u8 *)save) && save->version == 3);
+}
+
+static void randoIoSaveTimer(u32 runms, u32 runflags)
+{
+    RandoSave disk;
+
+    if (randoIoLoadSave(&disk) && disk.seedlo == s_save.seedlo && disk.seedhi == s_save.seedhi)
+    {
+        disk.version = RANDO_SAVE_VERSION;
+        disk.runms = runms;
+        disk.runflags = runflags;
+        randoIoWriteSave(&disk);
+    }
 }
 
 static void randoIoWriteSave(const RandoSave *save)

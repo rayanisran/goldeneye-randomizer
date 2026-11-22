@@ -17,7 +17,9 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import generate as gen
-from . import levels, n64rom, updater, world as worlddata, wsplit
+import json
+
+from . import levels, n64rom, stats as runstats, updater, world as worlddata
 from .version import RELEASE
 
 APP_TITLE = "GoldenEye Randomizer"
@@ -28,6 +30,7 @@ TIERS = [("easy", "Easy", "no tricks needed"),
          ("advanced", "Advanced", "known tricks may be needed (keycard skips, cell warp...)")]
 GOAL_CHOICES = {"codes": f"Find the {gen.CODE_WORD} code letter keycards", "all": "Beat every level"}
 NOTE = "#555"
+PREFS_FILE = "launcher.json"   # in data/rando: this player's launcher choices
 ALERT = "#c00000"
 WRAP = 720   # pixels: the current-seed summary wraps here instead of widening the window
 
@@ -72,6 +75,101 @@ def read_progress(rando, code):
     code = " ".join(c if letters.get(n) is not None and bits[letters[n] >> 5] >> (letters[n] & 31) & 1 else "_"
                     for n, c in enumerate(gen.CODE_WORD)) if letters else None
     return beaten, total, found, placed, code
+
+
+class StatsWindow(tk.Toplevel):
+    """A finished (or ongoing) run at a glance: four numbers, the JANUS
+    letters on a timeline, and time per level."""
+
+    W = 660
+    BG, INK, DIM, LINE = "#ffffff", "#1d1d1f", "#8a8a8e", "#e3e3e6"
+    GOLD, BAR, DONE, RED = "#d4a017", "#a9b4c2", "#4caf50", "#e0453a"
+
+    def __init__(self, master, run, found, total, code):
+        super().__init__(master)
+        self.title("Run stats")
+        self.resizable(False, False)
+        self.configure(background=self.BG)
+        levels_shown = sorted(run.levels.values(), key=lambda lv: -lv.seconds)
+        height = 300 + 22 * len(levels_shown) + 20
+        c = tk.Canvas(self, width=self.W, height=height, background=self.BG, highlightthickness=0)
+        c.pack()
+        self.c = c
+        x0, x1 = 28, self.W - 28
+
+        # header
+        c.create_text(x0, 26, anchor="w", text="RUN COMPLETE" if run.finished_at is not None else "RUN SO FAR",
+                      fill=self.INK, font=("Segoe UI", 13, "bold"))
+        c.create_text(x1, 26, anchor="e", text=code, fill=self.DIM, font=("Segoe UI", 9))
+
+        # four numbers
+        pct = round(100 * found / total) if total else None
+        beaten = sum(1 for lv in run.levels.values() if lv.beaten)
+        letters, finish, span = run.timeline()
+        tiles = [(runstats.clock(run.run_total), "time") if run.run_total else (runstats.clock(run.seconds), "play time"),
+                 (str(run.deaths), "deaths"),
+                 (f"{pct}%" if pct is not None else str(found), "items"), (str(beaten), "levels beaten")]
+        tw = (x1 - x0) / len(tiles)
+        for i, (big, small) in enumerate(tiles):
+            cx = x0 + tw * i + tw / 2
+            colour = self.RED if small == "deaths" and run.deaths else self.INK
+            c.create_text(cx, 74, text=big, fill=colour, font=("Segoe UI", 24, "bold"))
+            c.create_text(cx, 104, text=small, fill=self.DIM, font=("Segoe UI", 9))
+        if pct is not None:   # a thin bar under the item count
+            i = 2
+            bx0, bx1 = x0 + tw * i + tw * 0.2, x0 + tw * (i + 1) - tw * 0.2
+            c.create_rectangle(bx0, 116, bx1, 119, fill=self.LINE, width=0)
+            c.create_rectangle(bx0, 116, bx0 + (bx1 - bx0) * found / total, 119, fill=self.GOLD, width=0)
+
+        # JANUS timeline
+        y = 178
+        c.create_line(x0, 140, x1, 140, fill=self.LINE)
+        end = max(finish or 0, span or 0, max((t for _, t in letters), default=0), 1)
+        lx0, lx1 = x0 + 6, x1 - 40
+        c.create_line(lx0, y, lx1, y, fill=self.LINE, width=3, capstyle="round")
+        xs = [lx0 + (lx1 - lx0) * t / end for _, t in letters]
+        fx = lx0 + (lx1 - lx0) * finish / end if finish is not None else None
+        if xs:   # lines first, so the letter discs sit on top of them
+            c.create_line(lx0, y, xs[-1], y, fill=self.GOLD, width=3)
+        if fx is not None:
+            c.create_line(xs[-1] if xs else lx0, y, fx, y, fill=self.DIM, width=1, dash=(3, 3))
+        last_x = -99
+        for n, ((letter, t), x) in enumerate(zip(letters, xs)):
+            up = x - last_x < 34 and n % 2 == 1        # neighbours too close: label above
+            c.create_oval(x - 13, y - 13, x + 13, y + 13, fill=self.GOLD, outline=self.BG, width=2)
+            c.create_text(x, y, text=letter, fill="#ffffff", font=("Segoe UI", 11, "bold"))
+            c.create_text(x, y - 26 if up else y + 28, text=runstats.clock(t), fill=self.DIM, font=("Segoe UI", 8))
+            last_x = x
+        if fx is not None:
+            c.create_text(fx + 8, y, anchor="w", text="\u2691", fill=self.DONE, font=("Segoe UI Symbol", 15))
+            c.create_text(fx + 6, y + 28, anchor="w", text=runstats.clock(finish), fill=self.DONE,
+                          font=("Segoe UI", 8, "bold"))
+
+        # time per level
+        y = 232
+        c.create_line(x0, y - 18, x1, y - 18, fill=self.LINE)
+        longest = max((lv.seconds for lv in levels_shown), default=1) or 1
+        nx, bx0, bx1 = x0 + 74, x0 + 84, x1 - 120
+        for lv in levels_shown:
+            c.create_text(nx, y, anchor="e", text=lv.name, fill=self.INK, font=("Segoe UI", 9))
+            bw = max((bx1 - bx0) * lv.seconds / longest, 2)
+            c.create_rectangle(bx0, y - 5, bx0 + bw, y + 5, fill=self.DONE if lv.beaten else self.BAR, width=0)
+            c.create_text(bx0 + bw + 8, y, anchor="w", text=runstats.clock(lv.seconds), fill=self.DIM,
+                          font=("Segoe UI", 8))
+            for d in range(lv.deaths):   # a red dot per death
+                dx = bx0 + bw + 48 + d * 9
+                c.create_oval(dx - 3, y - 3, dx + 3, y + 3, fill=self.RED, width=0)
+            y += 22
+        # legend, one line
+        ly = y + 6
+        c.create_rectangle(x0, ly - 4, x0 + 10, ly + 4, fill=self.DONE, width=0)
+        c.create_text(x0 + 16, ly, anchor="w", text="beaten", fill=self.DIM, font=("Segoe UI", 8))
+        c.create_oval(x0 + 70, ly - 3, x0 + 76, ly + 3, fill=self.RED, width=0)
+        c.create_text(x0 + 82, ly, anchor="w", text="death", fill=self.DIM, font=("Segoe UI", 8))
+        c.configure(height=ly + 18)
+        if master is not None and master.winfo_viewable():
+            self.transient(master)
+            self.geometry(f"+{master.winfo_rootx() + 60}+{master.winfo_rooty() + 30}")
 
 
 class ProgressWindow(tk.Toplevel):
@@ -166,6 +264,8 @@ class Launcher(tk.Tk):
         self.armor_respawn = tk.BooleanVar(value=False)
         self.jp_armor = tk.BooleanVar(value=False)
         self.jp_autoaim = tk.BooleanVar(value=False)
+        self.show_timer = tk.BooleanVar(value=self.load_prefs().get("show_timer", True))
+        self.show_timer.trace_add("write", lambda *_: self.save_prefs(show_timer=self.show_timer.get()))
         self.new_locks = tk.IntVar(value=0)
         self.glow_items = tk.BooleanVar(value=True)
         self.carriers = tk.StringVar(value="greyer")
@@ -185,7 +285,8 @@ class Launcher(tk.Tk):
             row=0, column=0, columnspan=6, sticky="w", padx=8, pady=(2, 4))
         ttk.Button(cur, text="Copy race code", command=self.copy_code).grid(row=1, column=0, sticky="w", padx=(8, 4), pady=(0, 6))
         ttk.Button(cur, text="Spoiler log...", command=self.open_spoiler).grid(row=1, column=1, sticky="w", padx=(0, 4), pady=(0, 6))
-        ttk.Button(cur, text="Load N64 ROM", command=self.make_n64_rom).grid(row=1, column=2, sticky="w", pady=(0, 6))
+        ttk.Button(cur, text="Load N64 ROM", command=self.make_n64_rom).grid(row=1, column=2, sticky="w", padx=(0, 4), pady=(0, 6))
+        ttk.Button(cur, text="Stats", command=self.open_stats).grid(row=1, column=3, sticky="w", pady=(0, 6))
         ttk.Button(cur, text="PLAY", command=self.play).grid(row=1, column=5, sticky="e", padx=8, pady=(0, 6))
 
         note = ("Each level opens when you find its clearance, or when you beat the level before it.\n"
@@ -194,9 +295,6 @@ class Launcher(tk.Tk):
         ttk.Label(self, text=note, foreground=NOTE).grid(row=4, column=0, sticky="w", padx=12, pady=(2, 8))
 
         self.game = None
-        self.timer = wsplit.Timer()
-        if wsplit.supported():
-            self.build_timer_box()
         self.build_update_row()
         self.refresh()
 
@@ -234,7 +332,7 @@ class Launcher(tk.Tk):
 
         box = ttk.LabelFrame(left, text="Handicaps")
         box.grid(row=3, column=0, **gap)
-        ttk.Checkbutton(box, text="Body armor respawns when you re-enter a level", variable=self.armor_respawn).grid(
+        ttk.Checkbutton(box, text="Body armors respawn when you re-enter a level", variable=self.armor_respawn).grid(
             row=0, column=0, sticky="w", padx=8)
         ttk.Checkbutton(box, text="Use JP BAs", variable=self.jp_armor).grid(row=1, column=0, sticky="w", padx=8)
         ttk.Checkbutton(box, text="Use JP auto-aim", variable=self.jp_autoaim).grid(
@@ -247,7 +345,7 @@ class Launcher(tk.Tk):
                 row=r, column=0, columnspan=2, sticky="w", padx=8)
         ttk.Checkbutton(box, text="Include Aztec and Egyptian", variable=self.bonus).grid(
             row=3, column=0, columnspan=2, sticky="w", padx=8)
-        ttk.Label(box, text="New locks on normally open doors").grid(row=4, column=0, sticky="w", padx=8, pady=(0, 4))
+        ttk.Label(box, text="Extra locks on normally open doors").grid(row=4, column=0, sticky="w", padx=8, pady=(0, 4))
         ttk.Spinbox(box, from_=0, to=10, textvariable=self.new_locks, width=4, state="readonly").grid(
             row=4, column=1, sticky="w", padx=(0, 8), pady=(0, 4))
 
@@ -266,7 +364,9 @@ class Launcher(tk.Tk):
         ttk.Label(box, text="Guards carrying an item").grid(row=2, column=0, sticky="w", padx=8, pady=(0, 4))
         for i, key in enumerate(gen.CARRIERS):
             ttk.Radiobutton(box, text=gen.CARRIER_LABELS[key], value=key, variable=self.carriers).grid(
-                row=2, column=1 + i, sticky="w", padx=(0, 8), pady=(0, 4))
+                row=2, column=1 + i, sticky="w", padx=(0, 8))
+        ttk.Checkbutton(box, text="Show the run timer in game", variable=self.show_timer).grid(
+            row=3, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
 
         for col in (left, right):
             col.columnconfigure(0, weight=1)
@@ -308,11 +408,41 @@ class Launcher(tk.Tk):
         return self.game is not None and self.game.poll() is None
 
     def watch_game(self):
-        """Never interrupt a run: updating is off while the game is open."""
+        """Never interrupt a run: updating is off while the game is open.
+        When the game closes after the seed was finished, the stats open."""
         busy = self.game_running()
         if busy != self.update_button.instate(["disabled"]):
             self.update_button.state(["disabled"] if busy else ["!disabled"])
+        was = getattr(self, "_game_was_running", False)
+        self._game_was_running = busy
+        if was and not busy and not getattr(self, "_finished_before_play", True):
+            run = self.run_stats()
+            if run and run[0].finished_at is not None:
+                self._finished_before_play = True
+                self.open_stats()
         self.after(1000, self.watch_game)
+
+    def run_stats(self):
+        """(RunStats, items found, items total, race code) for the current seed, or None."""
+        code, _ = self.current()
+        seed_path = self.rando / "seed.bin"
+        if not code or not seed_path.exists():
+            return None
+        lo, hi = struct.unpack_from("<II", seed_path.read_bytes(), 8)
+        log = self.rando / f"log-{(hi << 32) | lo:016x}.txt"
+        if not log.exists():
+            return None
+        run = runstats.parse(log.read_text(encoding="utf-8", errors="replace"))
+        prog = read_progress(self.rando, code)
+        found, total = (prog[2], prog[3]) if prog else (run.found, 0)
+        return run, found, total, code
+
+    def open_stats(self):
+        data = self.run_stats()
+        if data is None:
+            messagebox.showinfo(APP_TITLE, "No stats yet: play this seed first.")
+            return
+        StatsWindow(self, *data)
 
     def run_in_background(self, work, done, tick=None):
         """work() in a thread; done(result, error) back on the Tk thread."""
@@ -389,53 +519,20 @@ class Launcher(tk.Tk):
         self.run_in_background(lambda: updater.stage(rel, self.root, lambda f: progress.__setitem__(0, f)),
                                done, lambda: bar.set(progress[0]))
 
-    def build_timer_box(self):
-        s = wsplit.load_settings(self.rando)
-        self.timer_open = tk.BooleanVar(value=s["open"])
-        self.timer_start = tk.BooleanVar(value=s["start"])
-        self.timer_path = tk.StringVar(value=s["path"])
-        self.timer_note = tk.StringVar()
-        box = ttk.LabelFrame(self, text="Timer")
-        box.grid(row=3, column=0, sticky="nsew", padx=8, pady=2)
-        box.columnconfigure(1, weight=1)
-        checks = ttk.Frame(box)
-        checks.grid(row=0, column=0, columnspan=3, sticky="w", padx=8)
-        ttk.Checkbutton(checks, text="Open WSplit when you press PLAY", variable=self.timer_open).grid(
-            row=0, column=0, sticky="w", padx=(0, 12))
-        self.timer_start_check = ttk.Checkbutton(
-            checks, text="Start the timer with the game, pause it when the game closes", variable=self.timer_start)
-        self.timer_start_check.grid(row=0, column=1, sticky="w")
-        ttk.Label(box, text="WSplit location").grid(row=1, column=0, sticky="w", padx=8, pady=(2, 4))
-        ttk.Entry(box, textvariable=self.timer_path).grid(row=1, column=1, sticky="ew", pady=(2, 4))
-        ttk.Button(box, text="Browse...", command=self.browse_timer).grid(row=1, column=2, sticky="e", padx=8, pady=(2, 4))
-        self.timer_note_label = ttk.Label(box, textvariable=self.timer_note, foreground=NOTE)
-        self.timer_note_label.grid(row=2, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
-        for var in (self.timer_open, self.timer_start, self.timer_path):
-            var.trace_add("write", lambda *_: self.timer_changed())
-        self.show_timer_state()
-
-    def show_timer_state(self):
-        on = self.timer_open.get()
-        self.timer_start_check.config(state="normal" if on else "disabled")
-        missing = on and not Path(self.timer_path.get()).is_file()
-        self.timer_note.set("WSplit isn't at this location, so PLAY will start the game without it." if missing else "")
-        if missing:
-            self.timer_note_label.grid()
-        else:
-            self.timer_note_label.grid_remove()   # no empty row when there's nothing to say
-
-    def timer_changed(self):
-        self.show_timer_state()
+    def load_prefs(self):
         try:
-            wsplit.save_settings(self.rando, {"path": self.timer_path.get(), "open": self.timer_open.get(),
-                                              "start": self.timer_start.get()})
-        except OSError as e:
-            messagebox.showerror(APP_TITLE, f"Could not save the timer settings: {e}")
+            return json.loads((self.rando / PREFS_FILE).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
 
-    def browse_timer(self):
-        picked = filedialog.askopenfilename(title="WSplit", filetypes=[("WSplit", "WSplit.exe"), ("Programs", "*.exe")])
-        if picked:
-            self.timer_path.set(str(Path(picked)))
+    def save_prefs(self, **changes):
+        prefs = self.load_prefs()
+        prefs.update(changes)
+        try:
+            self.rando.mkdir(parents=True, exist_ok=True)
+            (self.rando / PREFS_FILE).write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+        except OSError:
+            pass   # a preference, not worth an error box
 
     # -------------------------------------------------------------- actions
 
@@ -589,11 +686,10 @@ class Launcher(tk.Tk):
         if self.game and self.game.poll() is None:
             messagebox.showinfo(APP_TITLE, "The game is already running.")
             return
-        problem = self.timer.open(self.rando)
-        if problem:
-            messagebox.showwarning(APP_TITLE, f"{problem}\n\nThe game will start without it.")
-        self.game = subprocess.Popen([str(exe)], cwd=str(self.root))
-        self.timer.run_with(self.game)
+        run = self.run_stats()
+        self._finished_before_play = bool(run and run[0].finished_at is not None)
+        env = dict(os.environ, GE_RANDO_TIMER="1" if self.show_timer.get() else "0")
+        self.game = subprocess.Popen([str(exe)], cwd=str(self.root), env=env)
 
 
 def selftest(path):

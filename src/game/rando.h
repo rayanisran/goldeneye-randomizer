@@ -90,6 +90,8 @@ char *randoInvName(ObjectRecord *obj);
 int  randoMenuItemNames(const char **names, int max);
 /* ...and the code word section: "JA__S" into code (6 bytes), letters found or -1. */
 int  randoMenuCodeLetters(char *code);
+/* ...and the run timer, formatted: 0 = none to show, 1 running, 2 finished. */
+int  randoRunTimer(char *out, int size);
 
 /* port input.c: note controller drops/returns in the progress log. */
 void randoLogEvent(const char *line);

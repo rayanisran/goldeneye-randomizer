@@ -97,13 +97,18 @@ All settings are in the launcher and are part of the race code.
 | **Rounds in a gun a guard drops** | 1-30 (default 5) | Ammo in a gun picked up from a guard, the same on every difficulty. Guns lying in the level keep their usual amount. |
 | **Handicaps: Use JP BAs** | on / off (default off) | The Japanese release loads every body armor in a level on every difficulty (the level files are the same; its code skips the difficulty check for armor): 50 on every difficulty instead of 50 / 34 / 19 on Agent / Secret Agent / 00 Agent. This does the same on any difficulty. |
 | **Handicaps: Use JP auto-aim** | on / off (default off) | The Japanese release's auto-aim locks on from further to the side on the harder difficulties: lock-on window x1.1 on Secret Agent (US x0.75) and x0.75 on 00 Agent (US x0.2). Agent and 007 are the same in both. |
-| **Handicaps: Body armor respawns when you re-enter a level** | on / off (default off) | Body armor you already picked up lies in the same place again every time you enter that level (guns don't). Health still never comes back on its own, so this is the way to make long runs, and 00 Agent with its scarce armor, more forgiving. |
+| **Handicaps: Body armors respawn when you re-enter a level** | on / off (default off) | Body armor you already picked up lies in the same place again every time you enter that level (guns don't). Health still never comes back on its own, so this is the way to make long runs, and 00 Agent with its scarce armor, more forgiving. |
 | **Announce carried items** | on / off | When a level starts, tells you which items it hands you. That hints at where they're used. |
 | **Keys and gadgets glow gold** | on / off | Keys, keycards, mines and other small items still to find glow gold and stay visible from further away. Briefcases and guns are left as they are. |
 | **Guards carrying an item** | Slightly greyer / Look the same | Whether a guard holding an item looks a little different. |
-| **New locks** | 0-10 | Locks doors that are normally open. Each new lock gets a new key, named after its level, hidden like any other item. |
+| **Extra locks** | 0-10 | Locks doors that are normally open. Each extra lock gets a new key, named after its level, hidden like any other item. |
 | **Mirror mode** (PC only) | Off / Every level / Random each time you enter a level | Flips the world left to right; your gun, the watch and the HUD stay as they are, and controls and sound follow the flipped view. **Random** decides again on every entry, retries included. |
+| **Show the run timer in game** | on / off (default on) | A timer in the top-left corner, on the menus and in levels. It starts when the run's first level starts, counts while the game is open (closing the game pauses it), and stops and turns green when Cradle is beaten. Saved with the run. A launcher preference, not part of the race code. |
 | **Seed** | number, or blank | Blank picks a random seed. |
+
+**Stats** (Current seed): play time or the run timer, deaths, item percentage,
+levels beaten, the JANUS letters on a timeline, and time per level with
+deaths. It opens by itself when you close the game after beating Cradle.
 
 ## In-game
 
