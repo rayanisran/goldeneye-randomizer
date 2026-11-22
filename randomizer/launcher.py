@@ -354,7 +354,7 @@ class Launcher(tk.Tk):
         self.new_locks = tk.IntVar(value=0)
         self.glow_items = tk.BooleanVar(value=True)
         self.carriers = tk.StringVar(value="greyer")
-        self.placement = tk.StringVar(value="anywhere")
+        self.placement = tk.StringVar(value="original")
         self.goal = tk.StringVar(value="codes")
         self.seed_text = tk.StringVar()
         self.race_text = tk.StringVar()
