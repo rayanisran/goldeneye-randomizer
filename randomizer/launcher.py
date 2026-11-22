@@ -450,7 +450,7 @@ class Launcher(tk.Tk):
         for i, key in enumerate(gen.CARRIERS):
             ttk.Radiobutton(box, text=gen.CARRIER_LABELS[key], value=key, variable=self.carriers).grid(
                 row=2, column=1 + i, sticky="w", padx=(0, 8))
-        ttk.Checkbutton(box, text="Display seed timer in game (whole run)", variable=self.show_timer).grid(
+        ttk.Checkbutton(box, text="Display seed timer in game", variable=self.show_timer).grid(
             row=3, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
 
         for col in (left, right):

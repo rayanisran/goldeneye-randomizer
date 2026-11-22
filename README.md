@@ -103,7 +103,7 @@ All settings are in the launcher and are part of the race code.
 | **Guards carrying an item** | Slightly greyer / Look the same | Whether a guard holding an item looks a little different. |
 | **Extra locks** | 0-10 | Locks doors that are normally open. Each extra lock gets a new key, named after its level, hidden like any other item. |
 | **Mirror mode** (PC only) | Off / 50% of levels / Every level | Flips the world left to right; your gun, the watch and the HUD stay as they are, and controls and sound follow the flipped view. **50% of levels:** the seed picks about half the levels, and those are mirrored every time. |
-| **Display seed timer in game (whole run)** | on / off (default on) | A timer in the top-left corner, on the menus and in levels. It starts when the run's first level starts, counts while the game is open (closing the game pauses it), and stops and turns green when Cradle is beaten. Saved with the run. A launcher preference, not part of the race code. |
+| **Display seed timer in game** | on / off (default on) | A timer in the top-left corner, on the menus and in levels. It starts when the run's first level starts, counts while the game is open (closing the game pauses it), and stops and turns green when Cradle is beaten. Saved with the run. A launcher preference, not part of the race code. |
 | **Seed** | number, or blank | Blank picks a random seed. |
 
 **Stats** (Current seed): play time or the run timer, deaths, item percentage,
