@@ -3361,6 +3361,7 @@ static void tipSelfCheck(void);
  * from the menu underneath): A or Z next page (closes after the last), B
  * previous page (closes on the first), R / L / I close it on any page. */
 extern int randoMenuItemNames(const char **names, int max);
+extern int randoMenuCodeLetters(char *code);
 static int s_randoList = 0;    /* page shown, 1-based; 0 = closed */
 static int s_randoPages = 1;   /* pages at the last draw */
 
@@ -3402,11 +3403,36 @@ static Gfx *randoListEmit(Gfx *gdl, s32 W, s32 H)
     enum { MAXN = 128 };
     const char *names[MAXN];
     int n = randoMenuItemNames(names, MAXN), cols, rows, per, page, first, i;
-    const s32 lineH = 11, margin = 18, top = margin + 18;
-    s32 colW, x0 = margin, y0 = margin, x1 = W - margin, y1 = H - margin;
-    char title[48];
+    const s32 lineH = 11, margin = 18;
+    s32 colW, x0 = margin, y0 = margin, x1 = W - margin, y1 = H - margin, top = margin + 18;
+    char title[48], code[8];
+    int letters = randoMenuCodeLetters(code);
 
     if (n < 0) return gdl;
+    gdl = fillRect(gdl, x0, y0, x1, y1, 0, 0, 0, 200);                  /* dark, slightly see-through */
+    gdl = fillRect(gdl, x0, y0 + 15, x1, y0 + 16, 0x40, 0xff, 0x60, 160); /* line under the title */
+    if (letters >= 0) {
+        /* the code letter keycards: their own section on every page, the
+         * word filling in as they're found */
+        int k;
+        const s32 slotW = 16, ly = top + lineH + 3;   /* the word's row */
+        for (k = 0; code[k] != '\0'; k++) {   /* a line under each letter's slot */
+            s32 sx = x0 + 14 + k * slotW;
+            gdl = code[k] == '_' ? fillRect(gdl, sx, ly + lineH, sx + 10, ly + lineH + 1, 0x80, 0x80, 0x80, 220)
+                                 : fillRect(gdl, sx, ly + lineH, sx + 10, ly + lineH + 1, 0xff, 0xe0, 0x66, 220);
+        }
+        gdl = fillRect(gdl, x0 + 8, ly + lineH + 7, x1 - 8, ly + lineH + 8, 0x60, 0x60, 0x60, 160);
+        gdl = microcode_constructor(gdl);
+        snprintf(title, sizeof(title), "JANUS KEYCARDS: %d/5", letters);
+        gdl = drawBody(gdl, x0 + 8, top, title, 0xffe066ff);
+        for (k = 0; code[k] != '\0'; k++) {
+            if (code[k] != '_') {
+                char one[2] = { code[k], '\0' };
+                gdl = drawBody(gdl, x0 + 16 + k * slotW, ly, one, 0xffe066ff);
+            }
+        }
+        top = ly + lineH + 13;
+    }
     rows = (y1 - top - 6 - lineH - 2) / lineH;   /* last line: the controls hint */
     if (rows < 1) rows = 1;
     cols = n > rows ? 2 : 1;
@@ -3417,13 +3443,11 @@ static Gfx *randoListEmit(Gfx *gdl, s32 W, s32 H)
     first = (page - 1) * per;
     colW = (x1 - x0 - 16) / cols;
 
-    gdl = fillRect(gdl, x0, y0, x1, y1, 0, 0, 0, 200);                  /* dark, slightly see-through */
-    gdl = fillRect(gdl, x0, y0 + 15, x1, y0 + 16, 0x40, 0xff, 0x60, 160); /* line under the title */
     gdl = microcode_constructor(gdl);
-    snprintf(title, sizeof(title), n == 1 ? "ITEMS FOUND: 1" : "ITEMS FOUND: %d", n);
+    snprintf(title, sizeof(title), n == 1 ? "ITEMS FOUND: 1" : "ITEMS FOUND: %d", n + (letters > 0 ? letters : 0));
     gdl = drawBody(gdl, x0 + 8, y0 + 4, title, 0xffe066ff);
     if (n == 0) {
-        gdl = drawBody(gdl, x0 + 8, top, "Nothing yet.", 0xd0d0d0ff);
+        gdl = drawBody(gdl, x0 + 8, top, letters >= 0 ? "No other items yet." : "Nothing yet.", 0xd0d0d0ff);
     }
     for (i = 0; first + i < n && i < per; i++) {
         gdl = drawBody(gdl, x0 + 8 + (i / rows) * colW, top + (i % rows) * lineH, names[first + i], 0xf0f0f0ff);

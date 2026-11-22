@@ -1272,9 +1272,9 @@ int randoMenuItemNames(const char **names, int max)
     }
     for (i = 0; i < s_seed.nitems && n < max; i++)
     {
-        if (!itemFound(i) || s_seed.items[i].kind == KIND_PICKUP)
+        if (!itemFound(i) || s_seed.items[i].kind == KIND_PICKUP || s_seed.items[i].kind == KIND_LETTER)
         {
-            continue;
+            continue;   /* code letters have their own section (randoMenuCodeLetters) */
         }
         shortName(buf[n], s_seed.items[i].name);
         for (j = 0; buf[n][j] != '\0'; j++)   /* first line only (no strcspn in the N64 libc) */
@@ -1298,6 +1298,35 @@ int randoMenuItemNames(const char **names, int max)
         }
     }
     return n;
+}
+
+int randoMenuCodeLetters(char *code)
+{
+    /* Menu item list: the code word with the letters found so far and '_'
+     * for the rest ("JA__S", CODE_LETTERS characters + NUL); returns how many
+     * are found, or -1 when this seed has no code letters (or not on the menus). */
+    u32 bits;
+    s32 i, any = FALSE;
+
+    if (!randoActive() || s_level >= 0)
+    {
+        return -1;
+    }
+    for (i = 0; i < s_seed.nitems; i++)
+    {
+        any |= s_seed.items[i].kind == KIND_LETTER;
+    }
+    if (!any)
+    {
+        return -1;
+    }
+    bits = foundKeybits(KIND_LETTER);
+    for (i = 0; i < CODE_LETTERS; i++)
+    {
+        code[i] = (bits & (1u << i)) ? CODE_WORD[i] : '_';
+    }
+    code[CODE_LETTERS] = '\0';
+    return lettersFound();
 }
 #endif
 

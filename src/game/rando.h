@@ -84,6 +84,8 @@ char *randoInvName(ObjectRecord *obj);
 /* port optionsoverlay.c: found items' short names for the menu list; -1 when
  * not on the menus of a randomizer seed. */
 int  randoMenuItemNames(const char **names, int max);
+/* ...and the code word section: "JA__S" into code (6 bytes), letters found or -1. */
+int  randoMenuCodeLetters(char *code);
 
 /* port input.c: note controller drops/returns in the progress log. */
 void randoLogEvent(const char *line);
