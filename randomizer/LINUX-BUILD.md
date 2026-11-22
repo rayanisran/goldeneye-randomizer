@@ -64,13 +64,23 @@ a ROM ended up inside.
 
 ## 5. Publish
 
-Upload the tar.gz and its `.sha256` (`sha256sum X > X.sha256`) to the GitHub
-release whose tag is the `RELEASE` in `version.py`. When the Windows zip of the
-same commit is already there, add the Linux files to that release rather than
-making a new tag. The launcher's "Check for updates" picks the highest `rN`
-release that has a package for its platform and checks it against the
-`.sha256`, so both files are needed. Bump `version.py` (r6 -> r7) in the commit
-that starts the next release.
+One GitHub release holds both platforms. The Windows zip is usually published
+first, from another machine, and that creates the release and its tag. Build
+the Linux package from that same tag, then add it:
+
+```sh
+git fetch --tags && git checkout r6                   # the tag = RELEASE in randomizer/version.py
+# ... build and package (steps 2-4) ...
+python3 -m randomizer.release --platform linux --dry-run
+python3 -m randomizer.release --platform linux        # adds the tar.gz + .sha256 to release r6
+```
+
+If the release doesn't exist yet, the same command creates it (tagging this
+commit, notes from `CHANGELOG.md`) and the Windows zip gets added later. It
+needs the GitHub CLI logged in to the repo's account (`gh auth login`, or
+`GH_TOKEN`), and refuses a checkout with uncommitted changes or one that isn't
+the tagged commit. The launcher's update check only offers a release that has
+a package for its own platform, checked against the `.sha256`.
 
 ## 6. Test before sending
 

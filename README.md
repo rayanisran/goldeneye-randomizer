@@ -256,12 +256,30 @@ randomizer's Python changed, the last command alone is enough. With
 `pip install certifi` the launcher bundles it as the update check's fallback
 for machines whose certificate store Python can't use.
 
-To publish, upload the zip and its `.sha256` to the GitHub release whose tag
-is that `RELEASE`; the Linux tar.gz of the same commit goes on the same
-release. The launcher's update check takes the highest `rN` release that has
-a package for its platform and refuses a download that doesn't match the
-`.sha256`. Bump `version.py` when starting the next release (r6 -> r7, or r6 -> r6.1 for a hotfix that
-changes no race code or save) and add the release to `CHANGELOG.md`.
+### Publishing (one release, both platforms)
+
+A release is one GitHub release (tag = `RELEASE`, e.g. `r6`) holding the
+Windows zip and the Linux tar.gz, each with its `.sha256`. The two are built
+on different machines from the same commit:
+
+```sh
+python -m randomizer.release --platform win64     # or linux; --dry-run first to see what it will do
+```
+
+Whichever machine goes first creates the release: it tags the commit it was
+built from and uses that version's `CHANGELOG.md` section as the release
+notes. The second machine runs `git fetch --tags && git checkout r6`, builds,
+and runs the same command, which adds its files to the existing release. The
+script refuses a checkout with uncommitted changes or one that isn't the
+tagged commit. It needs the GitHub CLI logged in to the repo's account
+(`gh auth login`, or `GH_TOKEN`).
+
+The launcher's update check takes the highest release that has a package for
+its platform and refuses a download that doesn't match the `.sha256`, so a
+release with only the Windows zip so far is simply not offered on Linux yet.
+
+Before a release: bump `version.py` (r6 -> r7, or r6 -> r6.1 for a hotfix
+that changes no race code or save) and give it a dated `CHANGELOG.md` section.
 
 ## Building a Linux release
 
