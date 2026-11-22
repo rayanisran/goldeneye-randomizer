@@ -22,9 +22,10 @@ from .version import RELEASE
 
 APP_TITLE = "GoldenEye Randomizer"
 DIFF_LABELS = {"agent": "Agent", "secret": "Secret Agent", "00agent": "00 Agent", "ltk": "LTK", "dltk": "DLTK"}
+# Normal and Advanced are the same logic today (every trick is a Normal one), so
+# the launcher offers Easy and Advanced; codes with Normal still load.
 TIERS = [("easy", "Easy", "no tricks needed"),
-         ("normal", "Normal", "known tricks may be needed (keycard skips, cell warp...)"),
-         ("advanced", "Advanced", "Normal plus glitches")]
+         ("advanced", "Advanced", "known tricks may be needed (keycard skips, cell warp...)")]
 GOAL_CHOICES = {"codes": f"Find the {gen.CODE_WORD} code letter keycards", "all": "Beat every level"}
 NOTE = "#555"
 ALERT = "#c00000"
@@ -157,7 +158,7 @@ class Launcher(tk.Tk):
 
         self.diff = tk.StringVar(value="agent")
         self.bonus = tk.BooleanVar(value=True)
-        self.tier = tk.StringVar(value="normal")
+        self.tier = tk.StringVar(value="advanced")
         self.containers = tk.BooleanVar(value=False)
         self.handover = tk.BooleanVar(value=False)
         self.mirror = tk.StringVar(value="off")
@@ -211,9 +212,6 @@ class Launcher(tk.Tk):
         box.grid(row=0, column=0, **gap)
         for i, (key, label) in enumerate(DIFF_LABELS.items()):
             ttk.Radiobutton(box, text=label, value=key, variable=self.diff).grid(row=0, column=i, sticky="w", padx=(8, 4), pady=2)
-        ttk.Label(box, text="007 mode, enemy settings maxed. LTK: enemy health 0, one shot kills. DLTK: enemy health maxed too.",
-                  foreground=NOTE, wraplength=330, justify="left").grid(
-            row=1, column=0, columnspan=len(DIFF_LABELS), sticky="w", padx=8, pady=(0, 2))
 
         box = ttk.LabelFrame(left, text="Logic")
         box.grid(row=1, column=0, **gap)
@@ -233,8 +231,14 @@ class Launcher(tk.Tk):
         digits = (self.register(lambda s: s == "" or (s.isdigit() and len(s) <= 2)), "%P")
         ttk.Spinbox(box, from_=gen.DROP_AMMO_RANGE.start, to=gen.DROP_AMMO_RANGE.stop - 1, textvariable=self.drop_ammo,
                     width=4, validate="key", validatecommand=digits).grid(row=2, column=2, sticky="w", pady=(0, 4))
+
+        box = ttk.LabelFrame(left, text="Handicaps")
+        box.grid(row=3, column=0, **gap)
         ttk.Checkbutton(box, text="Body armor respawns when you re-enter a level", variable=self.armor_respawn).grid(
-            row=3, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
+            row=0, column=0, sticky="w", padx=8)
+        ttk.Checkbutton(box, text="Use JP BAs", variable=self.jp_armor).grid(row=1, column=0, sticky="w", padx=8)
+        ttk.Checkbutton(box, text="Use JP auto-aim", variable=self.jp_autoaim).grid(
+            row=2, column=0, sticky="w", padx=8, pady=(0, 4))
 
         box = ttk.LabelFrame(right, text="Goal and locks")
         box.grid(row=0, column=0, **gap)
@@ -263,13 +267,6 @@ class Launcher(tk.Tk):
         for i, key in enumerate(gen.CARRIERS):
             ttk.Radiobutton(box, text=gen.CARRIER_LABELS[key], value=key, variable=self.carriers).grid(
                 row=2, column=1 + i, sticky="w", padx=(0, 8), pady=(0, 4))
-
-        box = ttk.LabelFrame(right, text="Japanese version")
-        box.grid(row=3, column=0, **gap)
-        ttk.Checkbutton(box, text="Body armor: all of it, on every difficulty", variable=self.jp_armor).grid(
-            row=0, column=0, sticky="w", padx=8)
-        ttk.Checkbutton(box, text="Auto-aim: stronger on Secret Agent and 00 Agent", variable=self.jp_autoaim).grid(
-            row=1, column=0, sticky="w", padx=8, pady=(0, 4))
 
         for col in (left, right):
             col.columnconfigure(0, weight=1)
