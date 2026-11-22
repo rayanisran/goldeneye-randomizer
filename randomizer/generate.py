@@ -88,6 +88,7 @@ class Settings:
     drop_ammo: int = DROP_AMMO      # rounds in a gun a guard drops (the same on every difficulty)
     armor_respawn: bool = False     # body armor already picked up comes back on every entry
     jp_armor: bool = False          # the Japanese version's rule: every body armor, on every difficulty
+    jp_autoaim: bool = False        # the Japanese version's wider auto-aim on Secret Agent / 00 Agent
 
     def flags(self):
         # glow stored inverted, carriers as an index with "greyer" = 0 and drop
@@ -98,7 +99,8 @@ class Settings:
                (0 if self.glow_items else 512) | (CARRIERS.index(self.carriers) << 10) | \
                (PLACEMENTS.index(self.placement) << 11) | (GOALS.index(self.goal) << 12) | \
                (MIRRORS.index(self.mirror) << 13) | (((self.drop_ammo - DROP_AMMO) % 32) << 15) | \
-               (1 << 20 if self.armor_respawn else 0) | (1 << 21 if self.jp_armor else 0)
+               (1 << 20 if self.armor_respawn else 0) | (1 << 21 if self.jp_armor else 0) | \
+               (1 << 22 if self.jp_autoaim else 0)
 
 
 # ------------------------------------------------------------------ race codes
@@ -131,14 +133,15 @@ def parse_race_code(code, world):
                          "both racers need the same version")
     d, flags = parts[2][0], int(parts[2][1:] or "0", 16)
     drop_ammo = ((flags >> 15) + DROP_AMMO) % 32
-    if flags >> 22 or (flags >> 13) & 3 >= len(MIRRORS) or drop_ammo not in DROP_AMMO_RANGE:
+    if flags >> 23 or (flags >> 13) & 3 >= len(MIRRORS) or drop_ammo not in DROP_AMMO_RANGE:
         raise ValueError("this code has settings this copy doesn't know: both racers need the same version")
     settings = Settings(difficulty=DIFFS[DIFF_CHARS.index(d)], bonus=bool(flags & 1),
                         tier=logic.TIERS[(flags >> 1) & 3], containers=bool(flags & 8),
                         show_handover=bool(flags & 16), new_locks=(flags >> 5) & 15,
                         glow_items=not flags & 512, carriers=CARRIERS[(flags >> 10) & 1], placement=PLACEMENTS[(flags >> 11) & 1],
                         goal=GOALS[(flags >> 12) & 1], mirror=MIRRORS[(flags >> 13) & 3], drop_ammo=drop_ammo,
-                        armor_respawn=bool(flags >> 20 & 1), jp_armor=bool(flags >> 21 & 1))
+                        armor_respawn=bool(flags >> 20 & 1), jp_armor=bool(flags >> 21 & 1),
+                        jp_autoaim=bool(flags >> 22 & 1))
     return int(parts[3], 36), settings
 
 
@@ -681,7 +684,7 @@ def to_seedfile(res):
     seed = seedfile.Seed(seed=run_id(res["code"]), difficulty=DIFFS.index(settings.difficulty),
                          bonus_levels=settings.bonus, show_handover=settings.show_handover,
                          mirror_levels=[SP[k] for k in res["mirrored"]],
-                         drop_ammo=settings.drop_ammo, armor_respawn=settings.armor_respawn, jp_armor=settings.jp_armor,
+                         drop_ammo=settings.drop_ammo, armor_respawn=settings.armor_respawn, jp_armor=settings.jp_armor, jp_autoaim=settings.jp_autoaim,
                          glow_items=settings.glow_items, carriers=settings.carriers,
                          goal_codes=settings.goal == "codes",
                          start_levels=[SP[k] for k in res["start"]],
@@ -749,6 +752,7 @@ def describe(settings):
             f"ammo in dropped guns {settings.drop_ammo}, "
             f"body armor respawns {'on' if settings.armor_respawn else 'off'}, "
             f"Japanese version body armor {'on' if settings.jp_armor else 'off'}, "
+            f"Japanese version auto-aim {'on' if settings.jp_autoaim else 'off'}, "
             f"new locks {settings.new_locks}, "
             f"glowing items {'on' if settings.glow_items else 'off'}, "
             f"guards carrying items: {CARRIER_LABELS[settings.carriers].lower()}, "
@@ -825,6 +829,8 @@ def main(argv=None):
                     help="items only where the original game has one (they swap places)")
     ap.add_argument("--goal", choices=GOALS, default="codes",
                     help=f"codes: the {CODE_WORD} code letter keycards open Cradle; all: beat every level, then Cradle")
+    ap.add_argument("--jp-autoaim", action="store_true",
+                    help="the Japanese version's wider auto-aim on Secret Agent and 00 Agent")
     ap.add_argument("--jp-armor", action="store_true",
                     help="every body armor on every difficulty, as in the Japanese version")
     ap.add_argument("--armor-respawn", action="store_true",
@@ -840,7 +846,7 @@ def main(argv=None):
         settings = Settings(args.difficulty, not args.no_bonus, args.logic, args.containers, args.show_handover,
                             args.new_locks, not args.no_glow, args.carriers,
                             "original" if args.original_locations else "anywhere", args.goal, args.mirror,
-                            args.drop_ammo, args.armor_respawn, args.jp_armor)
+                            args.drop_ammo, args.armor_respawn, args.jp_armor, args.jp_autoaim)
     res = generate(seed, settings, world)
     _, words = write(res, args.out)
     print(f"race code {res['code']}  check words: {words}\n"

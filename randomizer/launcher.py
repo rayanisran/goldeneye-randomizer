@@ -164,6 +164,7 @@ class Launcher(tk.Tk):
         self.drop_ammo = tk.IntVar(value=gen.DROP_AMMO)
         self.armor_respawn = tk.BooleanVar(value=False)
         self.jp_armor = tk.BooleanVar(value=False)
+        self.jp_autoaim = tk.BooleanVar(value=False)
         self.new_locks = tk.IntVar(value=0)
         self.glow_items = tk.BooleanVar(value=True)
         self.carriers = tk.StringVar(value="greyer")
@@ -233,9 +234,7 @@ class Launcher(tk.Tk):
         ttk.Spinbox(box, from_=gen.DROP_AMMO_RANGE.start, to=gen.DROP_AMMO_RANGE.stop - 1, textvariable=self.drop_ammo,
                     width=4, validate="key", validatecommand=digits).grid(row=2, column=2, sticky="w", pady=(0, 4))
         ttk.Checkbutton(box, text="Body armor respawns when you re-enter a level", variable=self.armor_respawn).grid(
-            row=3, column=0, columnspan=3, sticky="w", padx=8)
-        ttk.Checkbutton(box, text="Japanese version body armor (all of it, on every difficulty)",
-                        variable=self.jp_armor).grid(row=4, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
+            row=3, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
 
         box = ttk.LabelFrame(right, text="Goal and locks")
         box.grid(row=0, column=0, **gap)
@@ -264,6 +263,13 @@ class Launcher(tk.Tk):
         for i, key in enumerate(gen.CARRIERS):
             ttk.Radiobutton(box, text=gen.CARRIER_LABELS[key], value=key, variable=self.carriers).grid(
                 row=2, column=1 + i, sticky="w", padx=(0, 8), pady=(0, 4))
+
+        box = ttk.LabelFrame(right, text="Japanese version")
+        box.grid(row=3, column=0, **gap)
+        ttk.Checkbutton(box, text="Body armor: all of it, on every difficulty", variable=self.jp_armor).grid(
+            row=0, column=0, sticky="w", padx=8)
+        ttk.Checkbutton(box, text="Auto-aim: stronger on Secret Agent and 00 Agent", variable=self.jp_autoaim).grid(
+            row=1, column=0, sticky="w", padx=8, pady=(0, 4))
 
         for col in (left, right):
             col.columnconfigure(0, weight=1)
@@ -440,7 +446,8 @@ class Launcher(tk.Tk):
         return gen.Settings(self.diff.get(), self.bonus.get(), self.tier.get(),
                             self.containers.get(), self.handover.get(), int(self.new_locks.get()),
                             self.glow_items.get(), self.carriers.get(), self.placement.get(), self.goal.get(), self.mirror.get(),
-                            self.ammo_drop(), self.armor_respawn.get(), self.jp_armor.get())
+                            self.ammo_drop(), self.armor_respawn.get(), self.jp_armor.get(),
+                            self.jp_autoaim.get())
 
     def ammo_drop(self):
         """The typed ammo amount, kept within the range the game takes."""

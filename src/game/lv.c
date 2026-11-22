@@ -1064,6 +1064,21 @@ void lvlSetMultipliersForDifficulty(void)
         g_SoloAmmoMultiplier = DEFAULT_007_SOLO_AMMO_MULTIPLIER;
         g_AiReactionSpeed = DEFAULT_007_AI_REACTION_SPEED;
     }
+#ifdef GE_RANDOMIZER
+    /* Japanese version auto-aim: its values for the horizontal lock-on window
+     * (chrprop.c), the j_text_trigger branches above */
+    if (randoJpAutoAim())
+    {
+        if (g_SelectedDifficulty == DIFFICULTY_SECRET)
+        {
+            difficulty = 1.1f;
+        }
+        else if (g_SelectedDifficulty == DIFFICULTY_00)
+        {
+            difficulty = 0.75f;
+        }
+    }
+#endif
 }
 
 

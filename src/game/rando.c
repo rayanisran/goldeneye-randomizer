@@ -122,6 +122,7 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "LTK",
 
 /* more option bits (the u8 after the mirror mask) */
 #define OPT2_ARMOR_RESPAWN 0x01   /* body armor already picked up is back on every entry */
+#define OPT2_JP_AUTOAIM    0x04   /* the Japanese version's wider auto-aim (lv.c) */
 #define OPT2_JP_ARMOR      0x02   /* the Japanese version's rule: body armor on every difficulty (the
                                     * generator makes all of it items; placed items load on any difficulty) */
 #define OPT_GOAL_CODES     0x10   /* the code letter keycards open Cradle, not beating
@@ -684,6 +685,10 @@ static void randoLoad(void)
         if (s_seed.options2 & OPT2_JP_ARMOR)
         {
             RANDOLOG("    Japanese version body armor: every armor on every difficulty\n");
+        }
+        if (s_seed.options2 & OPT2_JP_AUTOAIM)
+        {
+            RANDOLOG("    Japanese version auto-aim\n");
         }
     }
 }
@@ -2029,6 +2034,11 @@ s32 randoStageStatus(s32 levelid, s32 difficulty, s32 *status)
         *status = STAGESTATUS_LOCKED;
     }
     return TRUE;
+}
+
+s32 randoJpAutoAim(void)
+{
+    return randoActive() && (s_seed.options2 & OPT2_JP_AUTOAIM);
 }
 
 s32 randoDifficulty(void)

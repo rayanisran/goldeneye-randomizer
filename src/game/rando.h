@@ -59,6 +59,10 @@ s32  randoDifficulty(void);
 /* "LTK" / "DLTK" for those seeds, else NULL. */
 const char *randoModeName(void);
 
+/* lv.c: TRUE = the Japanese version's auto-aim (its wider lock-on window on
+ * Secret Agent and 00 Agent). */
+s32  randoJpAutoAim(void);
+
 /* file.c get_007_*: TRUE = an LTK/DLTK seed, *value is the fixed setting
  * (0 reaction, 1 health, 2 accuracy, 3 damage). */
 s32  randoLtkSetting(s32 which, f32 *value);
