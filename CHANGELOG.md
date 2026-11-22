@@ -12,6 +12,12 @@ Downloads are on the [releases page](https://github.com/rayanisran/goldeneye-ran
 - **r6.1, r6.2, …** Hotfixes. They keep every race code and save working, so
   r6.1 can race r6.
 
+## r6.1 (not released yet)
+
+Race codes and saves are the same as r6: r6.1 races r6.
+
+- **Changed:** *Item locations* starts on *Original locations only*.
+
 ## [r6](https://github.com/rayanisran/goldeneye-randomizer/releases/tag/r6) (2026-11-22, Windows and Linux)
 
 **Race codes changed:** r5 codes (starting `15-e978-`) don't load in r6, and
