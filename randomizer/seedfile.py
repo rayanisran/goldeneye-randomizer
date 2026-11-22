@@ -55,6 +55,7 @@ class Seed:
     mirror_levels: list = field(default_factory=list)   # SP levels always mirrored (mirror mode)
     drop_ammo: int = 5                  # rounds in a gun a guard drops (1-255)
     armor_respawn: bool = False         # body armor already picked up comes back on every entry
+    jp_armor: bool = False              # every body armor on every difficulty (Japanese version)
     bonus_parent: tuple = (NO_LEVEL, NO_LEVEL)
     start_pads: list = field(default_factory=lambda: [0] * LEVELS)
     items: list = field(default_factory=list)
@@ -88,5 +89,5 @@ class Seed:
         for lvl in self.mirror_levels:
             mmask |= 1 << lvl
         tail += struct.pack("<I", mmask)   # mirrored levels (options bit 128)
-        tail += struct.pack("<B", 1 if self.armor_respawn else 0)   # more options: bit 0 = armor respawns
+        tail += struct.pack("<B", (1 if self.armor_respawn else 0) | (2 if self.jp_armor else 0))   # OPT2_*
         return head + body + tail

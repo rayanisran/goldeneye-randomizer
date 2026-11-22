@@ -130,7 +130,7 @@ def finish_update(root, pid):
         if t.is_alive():
             app.after(100, poll)
             return
-        if "error" in out:
+        if "error" in out and not isinstance(out["error"], updater.FilesInUse):
             messagebox.showerror(APP_TITLE, f"The update didn't work: {out['error']}", parent=bar)
         # the updated copy, or the old one untouched when it failed
         exe = updater.launcher_in(root)
@@ -163,6 +163,7 @@ class Launcher(tk.Tk):
         self.mirror = tk.StringVar(value="off")
         self.drop_ammo = tk.IntVar(value=gen.DROP_AMMO)
         self.armor_respawn = tk.BooleanVar(value=False)
+        self.jp_armor = tk.BooleanVar(value=False)
         self.new_locks = tk.IntVar(value=0)
         self.glow_items = tk.BooleanVar(value=True)
         self.carriers = tk.StringVar(value="greyer")
@@ -232,7 +233,9 @@ class Launcher(tk.Tk):
         ttk.Spinbox(box, from_=gen.DROP_AMMO_RANGE.start, to=gen.DROP_AMMO_RANGE.stop - 1, textvariable=self.drop_ammo,
                     width=4, validate="key", validatecommand=digits).grid(row=2, column=2, sticky="w", pady=(0, 4))
         ttk.Checkbutton(box, text="Body armor respawns when you re-enter a level", variable=self.armor_respawn).grid(
-            row=3, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
+            row=3, column=0, columnspan=3, sticky="w", padx=8)
+        ttk.Checkbutton(box, text="Japanese version body armor (all of it, on every difficulty)",
+                        variable=self.jp_armor).grid(row=4, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
 
         box = ttk.LabelFrame(right, text="Goal and locks")
         box.grid(row=0, column=0, **gap)
@@ -296,6 +299,17 @@ class Launcher(tk.Tk):
         self.update_release = None
         self.update_busy = False
         self.check_updates(quiet=True)
+        self.watch_game()
+
+    def game_running(self):
+        return self.game is not None and self.game.poll() is None
+
+    def watch_game(self):
+        """Never interrupt a run: updating is off while the game is open."""
+        busy = self.game_running()
+        if busy != self.update_button.instate(["disabled"]):
+            self.update_button.state(["disabled"] if busy else ["!disabled"])
+        self.after(1000, self.watch_game)
 
     def run_in_background(self, work, done, tick=None):
         """work() in a thread; done(result, error) back on the Tk thread."""
@@ -354,9 +368,8 @@ class Launcher(tk.Tk):
         if not getattr(sys, "frozen", False):
             webbrowser.open(rel.page)   # running from the source code: nothing to replace
             return
-        if self.game and self.game.poll() is None:
-            messagebox.showinfo(APP_TITLE, "Close the game first, then click Get again.")
-            return
+        if self.game_running():
+            return   # the button is greyed out while the game runs (watch_game)
         bar = ProgressWindow(self, f"Updating to {rel.tag}")
         progress = [0.0]
 
@@ -427,7 +440,7 @@ class Launcher(tk.Tk):
         return gen.Settings(self.diff.get(), self.bonus.get(), self.tier.get(),
                             self.containers.get(), self.handover.get(), int(self.new_locks.get()),
                             self.glow_items.get(), self.carriers.get(), self.placement.get(), self.goal.get(), self.mirror.get(),
-                            self.ammo_drop(), self.armor_respawn.get())
+                            self.ammo_drop(), self.armor_respawn.get(), self.jp_armor.get())
 
     def ammo_drop(self):
         """The typed ammo amount, kept within the range the game takes."""

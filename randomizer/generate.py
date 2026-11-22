@@ -87,6 +87,7 @@ class Settings:
     mirror: str = "off"             # "on": a set of levels picked by the seed, always mirrored
     drop_ammo: int = DROP_AMMO      # rounds in a gun a guard drops (the same on every difficulty)
     armor_respawn: bool = False     # body armor already picked up comes back on every entry
+    jp_armor: bool = False          # the Japanese version's rule: every body armor, on every difficulty
 
     def flags(self):
         # glow stored inverted, carriers as an index with "greyer" = 0 and drop
@@ -97,7 +98,7 @@ class Settings:
                (0 if self.glow_items else 512) | (CARRIERS.index(self.carriers) << 10) | \
                (PLACEMENTS.index(self.placement) << 11) | (GOALS.index(self.goal) << 12) | \
                (MIRRORS.index(self.mirror) << 13) | (((self.drop_ammo - DROP_AMMO) % 32) << 15) | \
-               (1 << 20 if self.armor_respawn else 0)
+               (1 << 20 if self.armor_respawn else 0) | (1 << 21 if self.jp_armor else 0)
 
 
 # ------------------------------------------------------------------ race codes
@@ -130,14 +131,14 @@ def parse_race_code(code, world):
                          "both racers need the same version")
     d, flags = parts[2][0], int(parts[2][1:] or "0", 16)
     drop_ammo = ((flags >> 15) + DROP_AMMO) % 32
-    if flags >> 21 or (flags >> 13) & 3 >= len(MIRRORS) or drop_ammo not in DROP_AMMO_RANGE:
+    if flags >> 22 or (flags >> 13) & 3 >= len(MIRRORS) or drop_ammo not in DROP_AMMO_RANGE:
         raise ValueError("this code has settings this copy doesn't know: both racers need the same version")
     settings = Settings(difficulty=DIFFS[DIFF_CHARS.index(d)], bonus=bool(flags & 1),
                         tier=logic.TIERS[(flags >> 1) & 3], containers=bool(flags & 8),
                         show_handover=bool(flags & 16), new_locks=(flags >> 5) & 15,
                         glow_items=not flags & 512, carriers=CARRIERS[(flags >> 10) & 1], placement=PLACEMENTS[(flags >> 11) & 1],
                         goal=GOALS[(flags >> 12) & 1], mirror=MIRRORS[(flags >> 13) & 3], drop_ammo=drop_ammo,
-                        armor_respawn=bool(flags >> 20 & 1))
+                        armor_respawn=bool(flags >> 20 & 1), jp_armor=bool(flags >> 21 & 1))
     return int(parts[3], 36), settings
 
 
@@ -322,7 +323,7 @@ def generate(seed, settings, world=None):
                 continue
             homes[it.key] = dict(rec, level=it.home)
         pool.append(it)
-    for it, rec in pickup_items(world, enabled, diff):
+    for it, rec in pickup_items(world, enabled, diff, settings.jp_armor):
         homes[it.key] = dict(rec, level=it.home)
         pool.append(it)
 
@@ -604,12 +605,16 @@ PICKUP_NAMES = {
 }
 
 
-def pickup_items(world, enabled, diff):
+def pickup_items(world, enabled, diff, jp_armor=False):
     """Each level's own body armor and floor guns, as never-needed items:
     shuffled like everything else, and in original-locations mode each one's
-    place is an original location. Yields (item, its record)."""
+    place is an original location. Yields (item, its record).
+    jp_armor: the Japanese version loads every body armor on every difficulty
+    (prop.c, j_text_trigger), so all of a level's armor is there."""
     for lv in enabled:
         for rec in world["levels"][lv]["pickups"]:
+            if jp_armor and rec["type"] == "Armour":
+                rec = dict(rec, diffs=list(("agent", "secret", "00agent")))
             if diff not in rec["diffs"]:
                 continue
             if rec["type"] == "Armour":
@@ -676,7 +681,7 @@ def to_seedfile(res):
     seed = seedfile.Seed(seed=run_id(res["code"]), difficulty=DIFFS.index(settings.difficulty),
                          bonus_levels=settings.bonus, show_handover=settings.show_handover,
                          mirror_levels=[SP[k] for k in res["mirrored"]],
-                         drop_ammo=settings.drop_ammo, armor_respawn=settings.armor_respawn,
+                         drop_ammo=settings.drop_ammo, armor_respawn=settings.armor_respawn, jp_armor=settings.jp_armor,
                          glow_items=settings.glow_items, carriers=settings.carriers,
                          goal_codes=settings.goal == "codes",
                          start_levels=[SP[k] for k in res["start"]],
@@ -743,6 +748,7 @@ def describe(settings):
             f"mirror mode: {MIRROR_LABELS[settings.mirror].lower()}, "
             f"ammo in dropped guns {settings.drop_ammo}, "
             f"body armor respawns {'on' if settings.armor_respawn else 'off'}, "
+            f"Japanese version body armor {'on' if settings.jp_armor else 'off'}, "
             f"new locks {settings.new_locks}, "
             f"glowing items {'on' if settings.glow_items else 'off'}, "
             f"guards carrying items: {CARRIER_LABELS[settings.carriers].lower()}, "
@@ -819,6 +825,8 @@ def main(argv=None):
                     help="items only where the original game has one (they swap places)")
     ap.add_argument("--goal", choices=GOALS, default="codes",
                     help=f"codes: the {CODE_WORD} code letter keycards open Cradle; all: beat every level, then Cradle")
+    ap.add_argument("--jp-armor", action="store_true",
+                    help="every body armor on every difficulty, as in the Japanese version")
     ap.add_argument("--armor-respawn", action="store_true",
                     help="body armor already picked up comes back every time you enter its level")
     ap.add_argument("--out", default="data/rando")
@@ -832,7 +840,7 @@ def main(argv=None):
         settings = Settings(args.difficulty, not args.no_bonus, args.logic, args.containers, args.show_handover,
                             args.new_locks, not args.no_glow, args.carriers,
                             "original" if args.original_locations else "anywhere", args.goal, args.mirror,
-                            args.drop_ammo, args.armor_respawn)
+                            args.drop_ammo, args.armor_respawn, args.jp_armor)
     res = generate(seed, settings, world)
     _, words = write(res, args.out)
     print(f"race code {res['code']}  check words: {words}\n"

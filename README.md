@@ -95,6 +95,7 @@ All settings are in the launcher and are part of the race code.
 | **Include Aztec and Egyptian** | on / off | Adds the two bonus levels (and their items) to the run. |
 | **Hide items inside crates and barrels (boxsanity)** | on / off | Crates and barrels can hold items too. Shoot them open. |
 | **Rounds in a gun a guard drops** | 1-30 (default 5) | Ammo in a gun picked up from a guard, the same on every difficulty. Guns lying in the level keep their usual amount. |
+| **Japanese version body armor** | on / off (default off) | The Japanese release loads every body armor in a level on every difficulty (the level files are the same; its code skips the difficulty check for armor), so 00 Agent gets all of Agent's armor. This does the same on any difficulty. |
 | **Body armor respawns when you re-enter a level** | on / off (default off) | Body armor you already picked up lies in the same place again every time you enter that level (guns don't). Health still never comes back on its own, so this is the way to make long runs, and 00 Agent with its scarce armor, more forgiving. |
 | **Announce carried items** | on / off | When a level starts, tells you which items it hands you. That hints at where they're used. |
 | **Keys and gadgets glow gold** | on / off | Keys, keycards, mines and other small items still to find glow gold and stay visible from further away. Briefcases and guns are left as they are. |

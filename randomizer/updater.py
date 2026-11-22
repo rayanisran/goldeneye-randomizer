@@ -258,6 +258,10 @@ def _copy_retrying(src, dst, tries=50):
             time.sleep(0.2)
 
 
+class FilesInUse(RuntimeError):
+    """The game is open: nothing was replaced, the old version reopens."""
+
+
 def _check_writable(paths, timeout=20.0):
     """Every program file about to be replaced can be written (the old launcher
     has fully exited, the game isn't running), so nothing is half-replaced."""
@@ -272,7 +276,7 @@ def _check_writable(paths, timeout=20.0):
                     break
             except PermissionError:
                 if time.time() > end:
-                    raise RuntimeError("the game or the launcher is still open; close it and try again")
+                    raise FilesInUse(str(dst))
                 time.sleep(0.25)
 
 

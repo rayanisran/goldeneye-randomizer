@@ -122,6 +122,8 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "LTK",
 
 /* more option bits (the u8 after the mirror mask) */
 #define OPT2_ARMOR_RESPAWN 0x01   /* body armor already picked up is back on every entry */
+#define OPT2_JP_ARMOR      0x02   /* the Japanese version's rule: body armor on every difficulty (the
+                                    * generator makes all of it items; placed items load on any difficulty) */
 #define OPT_GOAL_CODES     0x10   /* the code letter keycards open Cradle, not beating
                                    * every level (older seeds: plus the GoldenEye Key) */
 
@@ -679,6 +681,10 @@ static void randoLoad(void)
                  (s_seed.options & OPT_MIRROR_SET) ? "on (seeded levels)" : (s_seed.options & OPT_MIRROR_ALL) ? "every level"
                  : (s_seed.options & OPT_MIRROR) ? "random" : "off",
                  (s_seed.options2 & OPT2_ARMOR_RESPAWN) ? "respawns" : "is gone once taken");
+        if (s_seed.options2 & OPT2_JP_ARMOR)
+        {
+            RANDOLOG("    Japanese version body armor: every armor on every difficulty\n");
+        }
     }
 }
 
