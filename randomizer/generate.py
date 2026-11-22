@@ -42,7 +42,7 @@ DROP_AMMO = 5                  # default rounds in a gun a guard drops (race-cod
 DROP_AMMO_RANGE = range(1, 31)
 GOALS = ("codes", "all")                 # race-code bit 12
 GOAL_LABELS = {"codes": f"Find the {CODE_WORD} code letter keycards", "all": "Beat every level"}
-LOGIC_VERSION = 14            # bump whenever generation can change for the same code
+LOGIC_VERSION = 15            # bump whenever generation can change for the same code
 DIFFS = ("agent", "secret", "00agent")
 DIFF_CHARS = "ASO"
 ORIGINAL_SAME_LEVEL_WEIGHT = 0.04   # the same target there: few spots per level, so lower
@@ -80,6 +80,7 @@ class Settings:
     goal: str = "codes"             # "codes": the code letter keycards open Cradle; "all": beating every level
     mirror: str = "off"             # "on": a set of levels picked by the seed, always mirrored
     drop_ammo: int = DROP_AMMO      # rounds in a gun a guard drops (the same on every difficulty)
+    armor_respawn: bool = False     # body armor already picked up comes back on every entry
 
     def flags(self):
         # glow stored inverted, carriers as an index with "greyer" = 0 and drop
@@ -89,7 +90,8 @@ class Settings:
                (8 if self.containers else 0) | (16 if self.show_handover else 0) | (self.new_locks << 5) | \
                (0 if self.glow_items else 512) | (CARRIERS.index(self.carriers) << 10) | \
                (PLACEMENTS.index(self.placement) << 11) | (GOALS.index(self.goal) << 12) | \
-               (MIRRORS.index(self.mirror) << 13) | (((self.drop_ammo - DROP_AMMO) % 32) << 15)
+               (MIRRORS.index(self.mirror) << 13) | (((self.drop_ammo - DROP_AMMO) % 32) << 15) | \
+               (1 << 20 if self.armor_respawn else 0)
 
 
 # ------------------------------------------------------------------ race codes
@@ -122,13 +124,14 @@ def parse_race_code(code, world):
                          "both racers need the same version")
     d, flags = parts[2][0], int(parts[2][1:] or "0", 16)
     drop_ammo = ((flags >> 15) + DROP_AMMO) % 32
-    if flags >> 20 or (flags >> 13) & 3 >= len(MIRRORS) or drop_ammo not in DROP_AMMO_RANGE:
+    if flags >> 21 or (flags >> 13) & 3 >= len(MIRRORS) or drop_ammo not in DROP_AMMO_RANGE:
         raise ValueError("this code has settings this copy doesn't know: both racers need the same version")
     settings = Settings(difficulty=DIFFS[DIFF_CHARS.index(d)], bonus=bool(flags & 1),
                         tier=logic.TIERS[(flags >> 1) & 3], containers=bool(flags & 8),
                         show_handover=bool(flags & 16), new_locks=(flags >> 5) & 15,
                         glow_items=not flags & 512, carriers=CARRIERS[(flags >> 10) & 1], placement=PLACEMENTS[(flags >> 11) & 1],
-                        goal=GOALS[(flags >> 12) & 1], mirror=MIRRORS[(flags >> 13) & 3], drop_ammo=drop_ammo)
+                        goal=GOALS[(flags >> 12) & 1], mirror=MIRRORS[(flags >> 13) & 3], drop_ammo=drop_ammo,
+                        armor_respawn=bool(flags >> 20 & 1))
     return int(parts[3], 36), settings
 
 
@@ -667,7 +670,7 @@ def to_seedfile(res):
     seed = seedfile.Seed(seed=run_id(res["code"]), difficulty=DIFFS.index(settings.difficulty),
                          bonus_levels=settings.bonus, show_handover=settings.show_handover,
                          mirror_levels=[SP[k] for k in res["mirrored"]],
-                         drop_ammo=settings.drop_ammo,
+                         drop_ammo=settings.drop_ammo, armor_respawn=settings.armor_respawn,
                          glow_items=settings.glow_items, carriers=settings.carriers,
                          goal_codes=settings.goal == "codes",
                          start_levels=[SP[k] for k in res["start"]],
@@ -733,6 +736,7 @@ def describe(settings):
             f"announce carried items {'on' if settings.show_handover else 'off'}, "
             f"mirror mode: {MIRROR_LABELS[settings.mirror].lower()}, "
             f"ammo in dropped guns {settings.drop_ammo}, "
+            f"body armor respawns {'on' if settings.armor_respawn else 'off'}, "
             f"new locks {settings.new_locks}, "
             f"glowing items {'on' if settings.glow_items else 'off'}, "
             f"guards carrying items: {CARRIER_LABELS[settings.carriers].lower()}, "
@@ -809,6 +813,8 @@ def main(argv=None):
                     help="items only where the original game has one (they swap places)")
     ap.add_argument("--goal", choices=GOALS, default="codes",
                     help=f"codes: the {CODE_WORD} code letter keycards open Cradle; all: beat every level, then Cradle")
+    ap.add_argument("--armor-respawn", action="store_true",
+                    help="body armor already picked up comes back every time you enter its level")
     ap.add_argument("--out", default="data/rando")
     args = ap.parse_args(argv)
 
@@ -820,7 +826,7 @@ def main(argv=None):
         settings = Settings(args.difficulty, not args.no_bonus, args.logic, args.containers, args.show_handover,
                             args.new_locks, not args.no_glow, args.carriers,
                             "original" if args.original_locations else "anywhere", args.goal, args.mirror,
-                            args.drop_ammo)
+                            args.drop_ammo, args.armor_respawn)
     res = generate(seed, settings, world)
     _, words = write(res, args.out)
     print(f"race code {res['code']}  check words: {words}\n"

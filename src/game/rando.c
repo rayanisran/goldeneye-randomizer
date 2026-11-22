@@ -19,6 +19,8 @@
  *       (the level's script gives Bond the object with that tag - Mishkin's safe
  *        key - so the item placed on that guard takes over the tag)
  *   ..  (optional) u8 rounds in a gun a guard drops (0 or missing: 5)
+ *   ..  (optional) u32 mirrored SP levels (options bit 0x80)
+ *   ..  (optional) u8 more options (OPT2_*; missing: 0)
  *   modes: 0 pad, 1 guard, 2 inside a container, 3 inside a safe (ref = the
  *   safe-link record), 4 handed over when play starts (like Q's gadgets)
  *       (entering `level` while owning `weapon` raises that ammo to `minimum`, so a
@@ -114,6 +116,9 @@ static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" 
 #define OPT_MIRROR_SET     0x80   /* the levels in mirrorMask are always mirrored */
 
 #define DROP_AMMO_DEFAULT  5      /* rounds in a gun a guard drops, when the seed doesn't say */
+
+/* more option bits (the u8 after the mirror mask) */
+#define OPT2_ARMOR_RESPAWN 0x01   /* body armor already picked up is back on every entry */
 #define OPT_GOAL_CODES     0x10   /* the code letter keycards open Cradle, not beating
                                    * every level (older seeds: plus the GoldenEye Key) */
 
@@ -208,6 +213,7 @@ static struct {
     RandoTag tags[RANDO_MAX_TAGS];
     u8  dropAmmo;                       /* rounds in a gun a guard drops */
     u32 mirrorMask;                     /* OPT_MIRROR_SET: SP levels always mirrored */
+    u8  options2;                       /* OPT2_* */
 } s_seed;
 
 static RandoSave s_save;
@@ -276,6 +282,19 @@ static s32 bitGet(const u32 *bits, s32 i) { return (bits[i >> 5] >> (i & 31)) & 
 static void bitSet(u32 *bits, s32 i) { bits[i >> 5] |= 1u << (i & 31); }
 
 static s32 itemFound(s32 i) { return bitGet(s_save.found, i); }
+
+/* Is item i gone from where it was placed? Found items are, except body armor
+ * with OPT2_ARMOR_RESPAWN: it lies there again on every entry (it still counts
+ * as found, and picking it up again just gives the armor). */
+static s32 itemTaken(s32 i)
+{
+    if ((s_seed.options2 & OPT2_ARMOR_RESPAWN) && s_seed.items[i].kind == KIND_PICKUP
+        && s_seed.items[i].rectype == PROPDEF_ARMOUR)
+    {
+        return FALSE;
+    }
+    return itemFound(i);
+}
 
 /* Ammo types that carry between levels: ordinary ammo (9mm..golden bullets)
  * AND gadget charges past AMMOTYPE_GLOBAL_MAX: laser/magnet watch energy,
@@ -582,6 +601,13 @@ static void randoLoad(void)
         s_seed.mirrorMask = (u32)buf[off] | ((u32)buf[off + 1] << 8) | ((u32)buf[off + 2] << 16) | ((u32)buf[off + 3] << 24);
     }
     off += 4;
+    /* u8 more options (OPT2_*): the options byte at 7 is full */
+    s_seed.options2 = 0;
+    if (off + 1 <= len)
+    {
+        s_seed.options2 = buf[off];
+    }
+    off += 1;
 
     if (!randoIoLoadSave(&s_save) || memcmp(s_save.magic, "GERV", 4) != 0
         || (s_save.version != RANDO_SAVE_VERSION && s_save.version != 3)
@@ -646,9 +672,10 @@ static void randoLoad(void)
         RANDOLOG("=== seed %08x%08x loaded (%s, %d items). Items found %d/%d. Beaten: %s Unlocked: %s\n",
                  s_seed.seedhi, s_seed.seedlo, s_diffNames[s_seed.difficulty & 3], nplaced,
                  nfound, nplaced, done[0] ? done : "none. ", open[0] ? open : "none");
-        RANDOLOG("    guards' dropped guns hold %d rounds; mirror mode %s\n", s_seed.dropAmmo,
+        RANDOLOG("    guards' dropped guns hold %d rounds; mirror mode %s; body armor %s\n", s_seed.dropAmmo,
                  (s_seed.options & OPT_MIRROR_SET) ? "on (seeded levels)" : (s_seed.options & OPT_MIRROR_ALL) ? "every level"
-                 : (s_seed.options & OPT_MIRROR) ? "random" : "off");
+                 : (s_seed.options & OPT_MIRROR) ? "random" : "off",
+                 (s_seed.options2 & OPT2_ARMOR_RESPAWN) ? "respawns" : "is gone once taken");
     }
 }
 
@@ -784,7 +811,7 @@ static void track(ObjectRecord *rec, s32 item, s32 appended, s32 carried, s32 re
 static s32 appendWanted(const RandoItem *it, s32 i, s32 lvl, s32 *carried)
 {
     *carried = FALSE;
-    if (!itemFound(i))
+    if (!itemTaken(i))
     {
         return it->place == lvl && !((it->kind == KIND_RECORD || it->kind == KIND_PICKUP) && it->home == lvl);
     }
@@ -1004,7 +1031,7 @@ void randoPatchSetup(s32 stageId)
             placeRecord(rec, &given, it->homerec);
             track(rec, i, FALSE, TRUE, it->homerec);
         }
-        else if ((it->kind == KIND_RECORD || (it->kind == KIND_PICKUP && !itemFound(i))) && it->place == lvl)
+        else if ((it->kind == KIND_RECORD || (it->kind == KIND_PICKUP && !itemTaken(i))) && it->place == lvl)
         {
             placeRecord(rec, it, it->homerec);
             track(rec, i, FALSE, FALSE, it->homerec);
@@ -1089,7 +1116,7 @@ void randoPatchSetup(s32 stageId)
         for (i = 0; i < s_ntracked; i++)
         {
             s32 item = s_tracked[i].item;
-            char *buf = itemFound(item) ? handed : hidden;
+            char *buf = s_tracked[i].carried ? handed : hidden;   /* respawned armor is "hidden here" */
 
             strcat(buf, "#");
             appendNum(buf, item);
@@ -1401,7 +1428,8 @@ char *randoOnPickup(ObjectRecord *obj)
 
             if (it->kind == KIND_PICKUP)
             {
-                /* armor and guns: the game's own message, and gone for good */
+                /* armor and guns: the game's own message, and gone for good
+                 * (armor comes back with OPT2_ARMOR_RESPAWN: see itemTaken) */
                 if (!itemFound(s_tracked[i].item))
                 {
                     bitSet(s_save.found, s_tracked[i].item);
@@ -1421,6 +1449,12 @@ char *randoOnPickup(ObjectRecord *obj)
                             display_text_for_weapon_in_lower_left_corner(it->weaponnum);
                         }
                     }
+                }
+                else
+                {
+                    RANDOLOG("    picked up #%d on %s again (respawned armor %.2f)\n", s_tracked[i].item,
+                             s_levelNames[s_level],
+                             obj->type == PROPDEF_ARMOUR ? ((BodyArmourRecord *)obj)->amount : 0.0f);
                 }
                 return NULL;
             }

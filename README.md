@@ -95,6 +95,7 @@ All settings are in the launcher and are part of the race code.
 | **Include Aztec and Egyptian** | on / off | Adds the two bonus levels (and their items) to the run. |
 | **Hide items inside crates and barrels (boxsanity)** | on / off | Crates and barrels can hold items too. Shoot them open. |
 | **Rounds in a gun a guard drops** | 1-30 (default 5) | Ammo in a gun picked up from a guard, the same on every difficulty. Guns lying in the level keep their usual amount. |
+| **Body armor respawns when you re-enter a level** | on / off (default off) | Body armor you already picked up lies in the same place again every time you enter that level (guns don't). Health still never comes back on its own, so this is the way to make long runs, and 00 Agent with its scarce armor, more forgiving. |
 | **Announce carried items** | on / off | When a level starts, tells you which items it hands you. That hints at where they're used. |
 | **Keys and gadgets glow gold** | on / off | Keys, keycards, mines and other small items still to find glow gold and stay visible from further away. Briefcases and guns are left as they are. |
 | **Guards carrying an item** | Slightly greyer / Look the same | Whether a guard holding an item looks a little different. |
@@ -172,7 +173,7 @@ codes, advanced logic, Agent):
 
 ```bash
 python -m randomizer.n64rom --base randomizer/n64/build/ge007-rando-base.z64 --out rando.z64 --spoiler spoiler.txt
-python -m randomizer.n64rom --base ... --out rando.z64 --race 14-e978-A3-4FNP1QRP
+python -m randomizer.n64rom --base ... --out rando.z64 --race 15-e978-A3-4FNP1QRP
 ```
 
 `python -m randomizer.n64.validate --base ... --emulator <mupen64plus folder>`
@@ -181,7 +182,7 @@ boots every level of a few seeds in Mupen64Plus and checks each one runs.
 ## Racing
 
 1. One player sets up a seed and presses **Copy race code**. A code looks like
-   `14-e978-A3-4FNP1QRP` and holds the randomizer version, the world-data
+   `15-e978-A3-4FNP1QRP` and holds the randomizer version, the world-data
    fingerprint, all the settings and the seed.
 2. The other players paste it under **Race** and press **Load race seed**.
 3. Before you start, everyone compares the four **check words** (for
@@ -213,7 +214,7 @@ and `data/` on its own. Seeds can also be made without the GUI:
 
 ```sh
 python -m randomizer.generate --difficulty secret --logic normal --containers --goal codes
-python -m randomizer.generate --race 14-e978-A3-4FNP1QRP
+python -m randomizer.generate --race 15-e978-A3-4FNP1QRP
 ```
 
 Seed files land in `data/rando/` (`seed.bin` for the game,

@@ -89,6 +89,7 @@ class Launcher(tk.Tk):
         self.handover = tk.BooleanVar(value=False)
         self.mirror = tk.StringVar(value="off")
         self.drop_ammo = tk.IntVar(value=gen.DROP_AMMO)
+        self.armor_respawn = tk.BooleanVar(value=False)
         self.new_locks = tk.IntVar(value=0)
         self.glow_items = tk.BooleanVar(value=True)
         self.carriers = tk.StringVar(value="greyer")
@@ -153,6 +154,8 @@ class Launcher(tk.Tk):
         digits = (self.register(lambda s: s == "" or (s.isdigit() and len(s) <= 2)), "%P")
         ttk.Spinbox(box, from_=gen.DROP_AMMO_RANGE.start, to=gen.DROP_AMMO_RANGE.stop - 1, textvariable=self.drop_ammo,
                     width=4, validate="key", validatecommand=digits).grid(row=2, column=2, sticky="w", pady=(0, 4))
+        ttk.Checkbutton(box, text="Body armor respawns when you re-enter a level", variable=self.armor_respawn).grid(
+            row=3, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
 
         box = ttk.LabelFrame(right, text="Goal and locks")
         box.grid(row=0, column=0, **gap)
@@ -252,7 +255,7 @@ class Launcher(tk.Tk):
         return gen.Settings(self.diff.get(), self.bonus.get(), self.tier.get(),
                             self.containers.get(), self.handover.get(), int(self.new_locks.get()),
                             self.glow_items.get(), self.carriers.get(), self.placement.get(), self.goal.get(), self.mirror.get(),
-                            self.ammo_drop())
+                            self.ammo_drop(), self.armor_respawn.get())
 
     def ammo_drop(self):
         """The typed ammo amount, kept within the range the game takes."""
@@ -380,7 +383,6 @@ class Launcher(tk.Tk):
         messagebox.showinfo(APP_TITLE, f"Saved {out}\n\nExperimental, not yet tested on a real N64. It needs an "
                                        "Expansion Pak, and the save type set to EEPROM 16K (EverDrive OS 3.x "
                                        "picks that up from the ROM). Items don't glow on the N64.")
-
 
     def play(self):
         exe = find_exe(self.root)
