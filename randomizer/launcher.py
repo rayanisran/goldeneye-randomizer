@@ -10,20 +10,24 @@ import os
 import struct
 import subprocess
 import sys
+import threading
 import tkinter as tk
+import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import generate as gen
-from . import levels, n64rom, world as worlddata, wsplit
+from . import levels, n64rom, updater, world as worlddata, wsplit
+from .version import RELEASE
 
 APP_TITLE = "GoldenEye Randomizer"
-DIFF_LABELS = {"agent": "Agent", "secret": "Secret Agent", "00agent": "00 Agent"}
+DIFF_LABELS = {"agent": "Agent", "secret": "Secret Agent", "00agent": "00 Agent", "ltk": "LTK", "dltk": "DLTK"}
 TIERS = [("easy", "Easy", "no tricks needed"),
          ("normal", "Normal", "known tricks may be needed (keycard skips, cell warp...)"),
          ("advanced", "Advanced", "Normal plus glitches")]
 GOAL_CHOICES = {"codes": f"Find the {gen.CODE_WORD} code letter keycards", "all": "Beat every level"}
 NOTE = "#555"
+ALERT = "#c00000"
 WRAP = 720   # pixels: the current-seed summary wraps here instead of widening the window
 
 
@@ -72,7 +76,7 @@ def read_progress(rando, code):
 class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(APP_TITLE)
+        self.title(f"{APP_TITLE} {RELEASE}")
         self.resizable(False, False)
         self.root = game_root()
         self.rando = self.root / "data" / "rando"
@@ -121,6 +125,7 @@ class Launcher(tk.Tk):
         self.timer = wsplit.Timer()
         if wsplit.supported():
             self.build_timer_box()
+        self.build_update_row()
         self.refresh()
 
     def build_settings(self):
@@ -135,6 +140,9 @@ class Launcher(tk.Tk):
         box.grid(row=0, column=0, **gap)
         for i, (key, label) in enumerate(DIFF_LABELS.items()):
             ttk.Radiobutton(box, text=label, value=key, variable=self.diff).grid(row=0, column=i, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(box, text="007 mode, enemy settings maxed. LTK: enemy health 0, one shot kills. DLTK: enemy health maxed too.",
+                  foreground=NOTE, wraplength=330, justify="left").grid(
+            row=1, column=0, columnspan=len(DIFF_LABELS), sticky="w", padx=8, pady=(0, 2))
 
         box = ttk.LabelFrame(left, text="Logic")
         box.grid(row=1, column=0, **gap)
@@ -200,6 +208,110 @@ class Launcher(tk.Tk):
         race.columnconfigure(1, weight=1)
         ttk.Button(race, text="Load race seed", command=self.generate_race).grid(row=0, column=2, sticky="e", padx=(6, 0))
         return outer
+
+    # ------------------------------------------------------------ updates
+
+    def build_update_row(self):
+        """Bottom-right corner: this copy's version and the update button. The
+        check runs once at start; a newer release turns both red."""
+        row = ttk.Frame(self)
+        row.grid(row=5, column=0, sticky="e", padx=8, pady=(0, 6))
+        self.update_text = tk.StringVar(value=f"Version {RELEASE}")
+        self.update_label = ttk.Label(row, textvariable=self.update_text, foreground=NOTE)
+        self.update_label.grid(row=0, column=0, padx=(0, 6))
+        style = ttk.Style(self)
+        style.configure("Update.TButton", foreground=ALERT)
+        style.map("Update.TButton", foreground=[("!disabled", ALERT)])
+        self.update_button = ttk.Button(row, text="Check for updates", command=self.check_updates)
+        self.update_button.grid(row=0, column=1)
+        self.update_release = None
+        self.update_busy = False
+        self.check_updates(quiet=True)
+
+    def run_in_background(self, work, done, tick=None):
+        """work() in a thread; done(result, error) back on the Tk thread."""
+        out = {}
+
+        def run():
+            try:
+                out["result"] = work()
+            except Exception as e:   # network, disk, a damaged download...
+                out["error"] = e
+
+        t = threading.Thread(target=run, daemon=True)
+        t.start()
+
+        def poll():
+            if t.is_alive():
+                if tick:
+                    tick()
+                self.after(200, poll)
+            else:
+                done(out.get("result"), out.get("error"))
+
+        self.after(200, poll)
+
+    def check_updates(self, quiet=False):
+        if updater.is_newer(self.update_release):
+            self.get_update()
+            return
+        if self.update_busy:
+            return
+        self.update_busy = True
+        if not quiet:
+            self.update_text.set("Checking for updates...")
+
+        def done(rel, err):
+            self.update_busy = False
+            if err is not None:
+                self.update_text.set(f"Version {RELEASE}" if quiet else
+                                     f"Version {RELEASE}: couldn't reach GitHub to check")
+            elif updater.is_newer(rel):
+                self.update_release = rel
+                self.update_text.set(f"New update available: {rel.tag}")
+                self.update_label.configure(foreground=ALERT)
+                self.update_button.configure(text=f"Get {rel.tag}", style="Update.TButton")
+            else:
+                self.update_text.set(f"Version {RELEASE}" if quiet else f"Version {RELEASE}: up to date")
+
+        self.run_in_background(updater.latest, done)
+
+    def get_update(self):
+        rel = self.update_release
+        if not getattr(sys, "frozen", False):
+            # running from the source code: git pull or a new download is the update
+            if messagebox.askyesno(APP_TITLE, f"{rel.tag} is out. This copy runs from the source code, so update "
+                                              "it with git pull or a new download.\n\nOpen the releases page?"):
+                webbrowser.open(rel.page)
+            return
+        size = f" ({rel.size / 1e6:.0f} MB)" if rel.size else ""
+        if not messagebox.askyesno(APP_TITLE, f"Download GoldenEye Randomizer {rel.tag}{size}?\n\n"
+                                              "It goes in a new folder next to this one, with your ROM, game "
+                                              "settings and seeds copied in. This copy stays as it is."):
+            return
+        self.update_button.state(["disabled"])
+        progress = [0.0]
+
+        def tick():
+            self.update_text.set(f"Downloading {rel.tag}... {progress[0] * 100:.0f}%")
+
+        def done(new_root, err):
+            self.update_button.state(["!disabled"])
+            if err is not None:
+                self.update_text.set(f"New update available: {rel.tag}")
+                messagebox.showerror(APP_TITLE, f"The update didn't work: {err}")
+                return
+            self.update_text.set(f"{rel.tag} is ready")
+            exe = updater.launcher_in(new_root)
+            if exe is None:
+                messagebox.showinfo(APP_TITLE, f"{rel.tag} is in:\n{new_root}")
+            elif messagebox.askyesno(APP_TITLE, f"{rel.tag} is ready in:\n{new_root}\n\n"
+                                                "Open it now? This window closes."):
+                subprocess.Popen([str(exe)], cwd=str(new_root))
+                self.destroy()
+
+        self.run_in_background(lambda: updater.install(rel, self.root, progress=lambda f: progress.__setitem__(0, f)),
+                               done, tick)
 
     def build_timer_box(self):
         s = wsplit.load_settings(self.rando)

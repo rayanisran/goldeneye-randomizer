@@ -49,10 +49,12 @@ python3 -m PyInstaller --onefile --name ge007-convert \
 
 ## 4. Bundle and package
 
+The release name comes from `randomizer/version.py` (`RELEASE = "r6"`, say):
+
 ```sh
-tools_pc/bundle-linux.sh rando-r5                     # -> dist/goldeneye-pc-port-rando-r5-linux-x86_64/
-python3 -m randomizer.package --platform linux --version r5
-# -> dist/GoldenEye-Randomizer-r5-linux.tar.gz
+tools_pc/bundle-linux.sh rando-r6                     # -> dist/goldeneye-pc-port-rando-r6-linux-x86_64/
+python3 -m randomizer.package --platform linux       # -> dist/GoldenEye-Randomizer-r6-linux.tar.gz
+pip install certifi                                   # optional: bundled as the update check's TLS fallback
 ```
 
 `bundle-linux.sh` copies SDL2 next to the game and sets its rpath, so players
@@ -60,7 +62,17 @@ need no packages. `package.py` adds the launcher (tkinter, frozen with
 PyInstaller), `START HERE.txt` and an empty `data/`, and refuses to package if
 a ROM ended up inside.
 
-## 5. Test before sending
+## 5. Publish
+
+Upload the tar.gz and its `.sha256` (`sha256sum X > X.sha256`) to the GitHub
+release whose tag is the `RELEASE` in `version.py`. When the Windows zip of the
+same commit is already there, add the Linux files to that release rather than
+making a new tag. The launcher's "Check for updates" picks the highest `rN`
+release that has a package for its platform and checks it against the
+`.sha256`, so both files are needed. Bump `version.py` (r6 -> r7) in the commit
+that starts the next release.
+
+## 6. Test before sending
 
 In a new empty folder, outside the repo:
 

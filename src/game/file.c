@@ -10,6 +10,12 @@
 f32 get_007_reaction_speed(void)
 {
     if (lvlGetSelectedDifficulty() == DIFFICULTY_007) {
+#ifdef GE_RANDOMIZER
+        f32 ltk;
+        if (randoLtkSetting(0, &ltk)) {
+            return ltk;
+        }
+#endif
         return slider_007_mode_reaction;
     }
     return 0.f;
@@ -18,6 +24,12 @@ f32 get_007_reaction_speed(void)
 f32 get_007_health_mod(void)
 {
     if (lvlGetSelectedDifficulty() == DIFFICULTY_007) {
+#ifdef GE_RANDOMIZER
+        f32 ltk;
+        if (randoLtkSetting(1, &ltk)) {
+            return ltk;
+        }
+#endif
         return slider_007_mode_health;
     }
     return 1.f;
@@ -26,6 +38,12 @@ f32 get_007_health_mod(void)
 f32 get_007_damage_mod(void)
 {
     if (lvlGetSelectedDifficulty() == DIFFICULTY_007) {
+#ifdef GE_RANDOMIZER
+        f32 ltk;
+        if (randoLtkSetting(3, &ltk)) {
+            return ltk;
+        }
+#endif
         return slider_007_mode_damage;
     }
     return 1.f;
@@ -34,6 +52,12 @@ f32 get_007_damage_mod(void)
 f32 get_007_accuracy_mod(void)
 {
     if (lvlGetSelectedDifficulty() == DIFFICULTY_007) {
+#ifdef GE_RANDOMIZER
+        f32 ltk;
+        if (randoLtkSetting(2, &ltk)) {
+            return ltk;
+        }
+#endif
         return slider_007_mode_accuracy;
     }
     return 1.f;

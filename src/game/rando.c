@@ -76,7 +76,10 @@ static const char *s_levelNames[] = {
     "Bunker 2", "Statue", "Archives", "Streets", "Depot", "Train", "Jungle", "Control",
     "Caverns", "Cradle", "Aztec", "Egyptian",
 };
-static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "007" };
+/* seed difficulty byte: 0-2 as the game, 3 LTK and 4 DLTK (both the game's 007) */
+#define SEEDDIFF_LTK  3
+#define SEEDDIFF_DLTK 4
+static const char *s_diffNames[] = { "Agent", "Secret Agent", "00 Agent", "LTK", "DLTK" };
 
 #define RANDO_VERSION       1   /* seed file */
 #define RANDO_SAVE_VERSION  4   /* 4: best times; a version 3 save loads without them */
@@ -670,7 +673,7 @@ static void randoLoad(void)
             }
         }
         RANDOLOG("=== seed %08x%08x loaded (%s, %d items). Items found %d/%d. Beaten: %s Unlocked: %s\n",
-                 s_seed.seedhi, s_seed.seedlo, s_diffNames[s_seed.difficulty & 3], nplaced,
+                 s_seed.seedhi, s_seed.seedlo, s_diffNames[s_seed.difficulty <= SEEDDIFF_DLTK ? s_seed.difficulty : 0], nplaced,
                  nfound, nplaced, done[0] ? done : "none. ", open[0] ? open : "none");
         RANDOLOG("    guards' dropped guns hold %d rounds; mirror mode %s; body armor %s\n", s_seed.dropAmmo,
                  (s_seed.options & OPT_MIRROR_SET) ? "on (seeded levels)" : (s_seed.options & OPT_MIRROR_ALL) ? "every level"
@@ -1123,7 +1126,7 @@ void randoPatchSetup(s32 stageId)
             strcat(buf, " ");
         }
         RANDOLOG("--> Enter %s (%s). Items hidden here: %s. Carried in and handed over: %s. [%d records, %d bytes added]\n",
-                 s_levelNames[lvl], s_diffNames[lvlGetSelectedDifficulty() & 3], hidden[0] ? hidden : "none",
+                 s_levelNames[lvl], (lvlGetSelectedDifficulty() == DIFFICULTY_007 && randoModeName() ? randoModeName() : s_diffNames[lvlGetSelectedDifficulty() & 3]), hidden[0] ? hidden : "none",
                  handed[0] ? handed : "none", nrec, extra);
         if (s_seed.options & (OPT_MIRROR | OPT_MIRROR_ALL | OPT_MIRROR_SET))
         {
@@ -1974,7 +1977,7 @@ s32 randoStageStatus(s32 levelid, s32 difficulty, s32 *status)
         return FALSE;
     }
 
-    if (levelid < 0 || levelid >= RANDO_LEVELS || difficulty != s_seed.difficulty)
+    if (levelid < 0 || levelid >= RANDO_LEVELS || difficulty != randoDifficulty())
     {
         *status = STAGESTATUS_LOCKED;
     }
@@ -1990,6 +1993,43 @@ s32 randoStageStatus(s32 levelid, s32 difficulty, s32 *status)
     {
         *status = STAGESTATUS_LOCKED;
     }
+    return TRUE;
+}
+
+s32 randoDifficulty(void)
+{
+    if (!randoActive())
+    {
+        return -1;
+    }
+    return s_seed.difficulty >= SEEDDIFF_LTK ? DIFFICULTY_007 : (s32)s_seed.difficulty;
+}
+
+const char *randoModeName(void)
+{
+    if (!randoActive() || s_seed.difficulty < SEEDDIFF_LTK || s_seed.difficulty > SEEDDIFF_DLTK)
+    {
+        return NULL;
+    }
+    return s_diffNames[s_seed.difficulty];
+}
+
+/* 007 sliders, as {reaction, health, accuracy, damage}; the menu's maximum is
+ * 100% reaction and 1000% for the others.
+ * LTK ("License to Kill"): enemies die in one hit, everything else maxed.
+ * DLTK: everything maxed, enemies too. */
+s32 randoLtkSetting(s32 which, f32 *value)
+{
+    static const f32 ltk[2][4] = {
+        { 1.0f, 0.0f, 10.0f, 10.0f },    /* LTK */
+        { 1.0f, 10.0f, 10.0f, 10.0f },   /* DLTK */
+    };
+
+    if (randoModeName() == NULL || which < 0 || which > 3)
+    {
+        return FALSE;
+    }
+    *value = ltk[s_seed.difficulty - SEEDDIFF_LTK][which];
     return TRUE;
 }
 

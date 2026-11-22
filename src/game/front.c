@@ -2531,6 +2531,12 @@ char* get_ptr_difficulty_name(s32 difficulty)
         break;
     case 3:
         text = langGet(getStringID(LTITLE, TITLE_STR_22_007)); //007
+#ifdef GE_RANDOMIZER
+        if (randoModeName() != NULL)
+        {
+            text = (char *)randoModeName();
+        }
+#endif
         break;
     }
     return text;
@@ -3159,6 +3165,12 @@ s32 get_highest_unlocked_difficulty_for_level(s32 arg0)
         {
             num = DIFFICULTY_007;
         }
+#ifdef GE_RANDOMIZER
+        if (randoDifficulty() == DIFFICULTY_007)
+        {
+            num = DIFFICULTY_007;
+        }
+#endif
 
         for (difficulty=num; difficulty >= 0; difficulty--)
         {
@@ -3535,6 +3547,12 @@ void interface_menu08_difficulty(void)
     {
         tab_prev_highlight = TRUE;
     }
+#ifdef GE_RANDOMIZER
+    else if (randoDifficulty() >= 0)
+    {
+        mission_difficulty_highlighted = randoDifficulty();
+    }
+#endif
     else if ((unlockedDifficulty >= DIFFICULTY_007) && (cursor_v_pos >= 275.0f))
     {
         mission_difficulty_highlighted = DIFFICULTY_007;
@@ -3645,6 +3663,12 @@ Gfx * print_current_solo_briefing_stage_name(Gfx *DL, char *text)
 
 void set_cursor_pos_difficulty(int difficulty)
 {
+#ifdef GE_RANDOMIZER
+    if (randoDifficulty() >= 0)
+    {
+        difficulty = 0;   /* the seed's difficulty is the only row */
+    }
+#endif
     cursor_h_pos = 106.0;
     cursor_v_pos = difficulty * 0x1e + 0xba;
 }
@@ -3724,12 +3748,19 @@ Gfx *constructor_menu08_difficulty(Gfx *DL)
 
     if (mission_difficulty_highlighted >= 0)
     {
+        s32 hlrow = mission_difficulty_highlighted;
+#ifdef GE_RANDOMIZER
+        if (randoDifficulty() >= 0)
+        {
+            hlrow = 0;
+        }
+#endif
         DL = microcode_constructor_related_to_menus(
             DL,
             0x7E - (j_text_trigger ? 0x32 : 0),
-            (mission_difficulty_highlighted * 0x1E) + 0xB2,
+            (hlrow * 0x1E) + 0xB2,
             0xF0,
-            (mission_difficulty_highlighted * 0x1E) + 0xC3,
+            (hlrow * 0x1E) + 0xC3,
             0x32);
     }
 
@@ -3739,7 +3770,19 @@ Gfx *constructor_menu08_difficulty(Gfx *DL)
     */
     for (i=0; i<DIFFICULTY_MAX; i++)
     {
-        if (i == 0 || unlockedDifficulty >= i)
+        s32 row = i;
+#ifdef GE_RANDOMIZER
+        /* a randomizer seed is played on its own difficulty only */
+        if (randoDifficulty() >= 0)
+        {
+            if (i != randoDifficulty())
+            {
+                continue;
+            }
+            row = 0;
+        }
+#endif
+        if (row != i || i == 0 || unlockedDifficulty >= i)
         {
             if (j_text_trigger)
             {
@@ -3761,14 +3804,14 @@ Gfx *constructor_menu08_difficulty(Gfx *DL)
             }
             else
             {
-                sprintf(&stagename_struct, "%d.\n", i + 1);
+                sprintf(&stagename_struct, "%d.\n", row + 1);
                 text_sp160 = &stagename_struct;
             }
 
             textMeasure(&sp98, &sp9C, text_sp160, ptrFontZurichBoldChars, ptrFontZurichBold, 0);
 
             x = 0x82 - (j_text_trigger ? (sp9C - 0xA) : 0);
-            y = (i * 0x1E) + 0xB4;
+            y = (row * 0x1E) + 0xB4;
             DL = frontPrintText(DL, &x, &y, text_sp160, ptrFontZurichBoldChars, ptrFontZurichBold, 0xFF, viGetX(), viGetY(), 0, 0);
 
             switch (i)
@@ -3784,11 +3827,20 @@ Gfx *constructor_menu08_difficulty(Gfx *DL)
                     break;
                 case 3:
                     text_sp160 = langGet(getStringID(LTITLE, TITLE_STR_39_0072)); // "007\n"
+#ifdef GE_RANDOMIZER
+                    if (randoModeName() != NULL)
+                    {
+                        static char modetext[8];
+
+                        sprintf(modetext, "%s\n", randoModeName());
+                        text_sp160 = modetext;
+                    }
+#endif
                     break;
             }
 
             x = 0x96;
-            y = (i * 0x1E) + 0xB4;
+            y = (row * 0x1E) + 0xB4;
             DL = frontPrintText(DL, &x, &y, text_sp160, ptrFontZurichBoldChars, ptrFontZurichBold, 0xFF, viGetX(), viGetY(), 0, 0);
         }
     }
@@ -3798,15 +3850,31 @@ Gfx *constructor_menu08_difficulty(Gfx *DL)
     /**
      * Draw the checkmark for completed difficulties.
     */
-    for (i=0; i<3; i++)
+    for (i=0; i<DIFFICULTY_MAX; i++)
     {
-        if ((i == 0 || unlockedDifficulty >= i)
+        s32 row = i;
+#ifdef GE_RANDOMIZER
+        if (randoDifficulty() >= 0)
+        {
+            if (i != randoDifficulty())
+            {
+                continue;
+            }
+            row = 0;
+        }
+        else
+#endif
+        if (i == DIFFICULTY_007)
+        {
+            continue;   /* the original never ticks 007 */
+        }
+        if ((row != i || i == 0 || unlockedDifficulty >= i)
             && (check_if_stage_completed_on_difficulty(briefingpage, i) == 3))
         {
             image = &mainfolderimages[IMAGE_CHECK];
 
             xypos[0] = 280.0f;
-            xypos[1] = (f32) ((i * 0x1E) + 0xBA);
+            xypos[1] = (f32) ((row * 0x1E) + 0xBA);
 
             halfedxy[0] = image->width * 0.5f;
             halfedxy[1] = image->height * 0.5f;
@@ -3837,6 +3905,13 @@ void init_menu09_007difficultyselect(void)
     highlight_enemy_health = 0;
     highlight_enemy_damage = 0;
     highlight_enemy_accuracy = 0;
+#ifdef GE_RANDOMIZER
+    /* an LTK/DLTK seed shows its fixed settings on this page */
+    randoLtkSetting(0, &slider_007_mode_reaction);
+    randoLtkSetting(1, &slider_007_mode_health);
+    randoLtkSetting(2, &slider_007_mode_accuracy);
+    randoLtkSetting(3, &slider_007_mode_damage);
+#endif
     load_walletbond();
 }
 
@@ -3946,6 +4021,13 @@ void interface_menu09_007options(void)
             temp_x = 0.0f;
         }
 
+#ifdef GE_RANDOMIZER
+        if (randoDifficulty() == DIFFICULTY_007)
+        {
+            /* LTK/DLTK settings are fixed (the same for every racer) */
+        }
+        else
+#endif
         if (highlight_enemy_reaction)
         {
             slider_007_mode_reaction = temp_x;

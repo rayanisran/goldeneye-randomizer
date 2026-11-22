@@ -1636,6 +1636,14 @@ void proplvreset2(enum LEVELID stageId)
 
             // per-difficulty "Don't Load" mask: PROPFLAG2_00000010/20/40 for Agent/Secret/00
             flags = 1 << (lvlGetSelectedDifficulty() + 4);
+#ifdef GE_RANDOMIZER
+            /* LTK seeds (007) are generated from 00 Agent's objects: load exactly
+             * those (007's own mask drops three body armors 00 Agent has) */
+            if (randoActive() && lvlGetSelectedDifficulty() == DIFFICULTY_007)
+            {
+                flags = 1 << (DIFFICULTY_00 + 4);
+            }
+#endif
 
             /**
              * Complete the skip loading mask started on the line above. Checks for:

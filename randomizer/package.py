@@ -1,6 +1,6 @@
 """Package the randomizer for sharing (race buddies): one folder, one zip.
 
-    python -m randomizer.package [--platform win64|linux] [--version r1]
+    python -m randomizer.package [--platform win64|linux]     (version: randomizer/version.py)
 
 Takes the port's own release bundle (tools_pc/bundle-win.sh or
 bundle-linux.sh output in dist/: engine, runtime libraries, the first-run ROM
@@ -16,6 +16,8 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from .version import RELEASE
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -41,6 +43,14 @@ data/ge007.ini; the randomizer's files are in data/rando/.
 """
 
 
+def certifi_installed():
+    try:
+        import certifi  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def run(cmd, **kw):
     print("+", " ".join(str(c) for c in cmd))
     subprocess.run(cmd, check=True, **kw)
@@ -49,8 +59,10 @@ def run(cmd, **kw):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--platform", choices=["win64", "linux"], default="win64" if sys.platform == "win32" else "linux")
-    ap.add_argument("--version", default="r1")
+    ap.add_argument("--version", default=RELEASE, help="must match randomizer/version.py (the launcher's update check reads it)")
     args = ap.parse_args()
+    if args.version != RELEASE:
+        raise SystemExit(f"--version {args.version} but randomizer/version.py says {RELEASE}: bump version.py instead")
 
     suffix = "win64" if args.platform == "win64" else "linux-x86_64"   # the bundle scripts' names
     base = ROOT / "dist" / f"goldeneye-pc-port-rando-{args.version}-{suffix}"
@@ -68,6 +80,7 @@ def main():
     run([sys.executable, "-m", "PyInstaller", "--onefile", "--windowed", "--noconfirm", "--name", name,
          "--distpath", str(work / "dist"), "--workpath", str(work / "build"), "--specpath", str(work),
          "--paths", str(ROOT), "--hidden-import", "randomizer.launcher",
+         *(["--hidden-import", "certifi", "--collect-data", "certifi"] if certifi_installed() else []),   # updater TLS fallback
          "--add-data", f"{ROOT / 'randomizer' / 'data' / 'world.json'}{sep}randomizer/data",
          str(entry)], cwd=ROOT)
     launcher = work / "dist" / (name + (".exe" if args.platform == "win64" else ""))

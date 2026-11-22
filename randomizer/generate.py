@@ -1,6 +1,6 @@
 """Generate a seed.
 
-    python -m randomizer.generate [--seed N] [--difficulty agent|secret|00agent]
+    python -m randomizer.generate [--seed N] [--difficulty agent|secret|00agent|ltk|dltk]
                                   [--no-bonus] [--logic easy|normal|advanced] [--containers] [--show-handover]
                                   [--race CODE] [--out data/rando]
 
@@ -42,9 +42,9 @@ DROP_AMMO = 5                  # default rounds in a gun a guard drops (race-cod
 DROP_AMMO_RANGE = range(1, 31)
 GOALS = ("codes", "all")                 # race-code bit 12
 GOAL_LABELS = {"codes": f"Find the {CODE_WORD} code letter keycards", "all": "Beat every level"}
-LOGIC_VERSION = 15            # bump whenever generation can change for the same code
-DIFFS = ("agent", "secret", "00agent")
-DIFF_CHARS = "ASO"
+LOGIC_VERSION = 16            # bump whenever generation can change for the same code
+DIFFS = ("agent", "secret", "00agent", "ltk", "dltk")   # ltk/dltk: the game's 007 mode, fixed settings
+DIFF_CHARS = "ASOLD"
 ORIGINAL_SAME_LEVEL_WEIGHT = 0.04   # the same target there: few spots per level, so lower
 SAME_LEVEL_WEIGHT = 0.3        # ~1-3% of items land on their own level
 MIN_SPHERES = 4                # balance: progression has to unfold in steps
@@ -64,6 +64,12 @@ CHECK_WORDS = ["Bond", "Natalya", "Boris", "Ourumov", "Xenia", "Jaws", "Mayday",
 
 class GenerationError(Exception):
     pass
+
+
+def world_diff(difficulty):
+    """The difficulty whose objects, objectives and logic a seed uses: LTK and
+    DLTK (007 mode) play 00 Agent's levels."""
+    return "00agent" if difficulty in ("ltk", "dltk") else difficulty
 
 
 @dataclass(frozen=True)
@@ -301,7 +307,7 @@ def weight(item, spot, per_level):
 
 def generate(seed, settings, world=None):
     world = world or worlddata.load()
-    diff, tier = settings.difficulty, settings.tier
+    diff, tier = world_diff(settings.difficulty), settings.tier
     rng = SeedRNG(seed)
     tricks = logic.pick_tricks(rng, settings.tier)   # tricks this seed's logic may rely on
     enabled = [lv.key for lv in levels.CHAIN] + (["aztec", "egyptian"] if settings.bonus else [])
@@ -622,13 +628,13 @@ def pick_new_locks(rng, settings, enabled, world):
     locks, items, per_level = [], [], {}
     for _ in range(settings.new_locks):
         usable = [lv for lv in sorted(avail) if avail[lv][1]
-                  and any(settings.difficulty in d["diffs"] for d in avail[lv][0])]
+                  and any(world_diff(settings.difficulty) in d["diffs"] for d in avail[lv][0])]
         if not usable:
             break
         fewest = min(per_level.get(lv, 0) for lv in usable)
         lv = rng.choice([x for x in usable if per_level.get(x, 0) == fewest])
         doors, bits = avail[lv]
-        door = rng.choice([d for d in doors if settings.difficulty in d["diffs"]])
+        door = rng.choice([d for d in doors if world_diff(settings.difficulty) in d["diffs"]])
         bit = bits.pop(0)
         taken = {door["idx"], door["partner"]}
         doors[:] = [d for d in doors if d["idx"] not in taken and d["partner"] not in taken]

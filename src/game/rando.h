@@ -51,6 +51,18 @@ s32  randoStageCompleted(s32 levelid);
 /* file2.c fileIsStageUnlockedAtDifficulty: TRUE = *status was decided. */
 s32  randoStageStatus(s32 levelid, s32 difficulty, s32 *status);
 
+/* The seed's difficulty as the game's (DIFFICULTY_AGENT..DIFFICULTY_007), or
+ * -1 with no seed. front.c's difficulty page offers only this one. 007 is
+ * "LTK" or "DLTK": 00 Agent's objects with fixed 007 settings. */
+s32  randoDifficulty(void);
+
+/* "LTK" / "DLTK" for those seeds, else NULL. */
+const char *randoModeName(void);
+
+/* file.c get_007_*: TRUE = an LTK/DLTK seed, *value is the fixed setting
+ * (0 reaction, 1 health, 2 accuracy, 3 damage). */
+s32  randoLtkSetting(s32 which, f32 *value);
+
 /* chrai.c AI_MoveObject: an object the randomizer placed with the script's
  * tagged object, to be moved along with it (Statue's flight recorder), or NULL. */
 ObjectRecord *randoScriptDropFollower(s32 tag);

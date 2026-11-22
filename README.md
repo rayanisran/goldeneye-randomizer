@@ -88,7 +88,7 @@ All settings are in the launcher and are part of the race code.
 
 | Setting | Options | What it does |
 |---|---|---|
-| **Difficulty** | Agent / Secret Agent / 00 Agent | The game difficulty. Harder difficulties have more objectives and so need more items (00 Agent Dam and Frigate each use up a bug, for example). |
+| **Difficulty** | Agent / Secret Agent / 00 Agent / LTK / DLTK | The game difficulty. Harder difficulties have more objectives and so need more items (00 Agent Dam and Frigate each use up a bug, for example). **LTK** and **DLTK** are the game's 007 mode on 00 Agent's levels, with fixed enemy settings so every racer plays the same: LTK has enemy health 0 (one shot kills) and enemy damage, accuracy and reaction speed at maximum; DLTK has all four at maximum. The game's difficulty page only offers the seed's difficulty. |
 | **Logic** | Easy / Normal / Advanced | Which tricks a seed is allowed to *require*. **Easy:** none. **Normal:** known skips (Facility scientists opening keycard doors, guards opening the doors in Silo, Bunker 1 and Aztec, the Bunker 2 cell warp, Caverns blast doors A and B, Surface 2's comms objective done with any explosive, leaving the Archives interrogation room without the key, Train's door key). **Advanced:** Normal plus glitches. No glitch tricks are listed yet, so for now it behaves like Normal. Each seed relies on a random ~55% of its tier's tricks. The rest still work, the generator just never counts on them. The spoiler log lists which ones a seed may need. |
 | **Goal** | Satellite codes / Beat every level | **Satellite codes:** J A N U S and the GoldenEye Key open Cradle. **Beat every level:** every other level beaten and the GoldenEye Key open Cradle. Clearances are in both. |
 | **Item locations** | Anywhere / Original locations only | **Anywhere:** spots all over the level (dead ends, side rooms, interiors) and any armed guard. **Original:** items go only where the original game has an item: the keys, documents and gadgets, the guards who carry them, the safes, and every body armor and gun lying in the open (about 110 places on Agent, 95 on Secret Agent, 82 on 00 Agent). There are more items than places, since clearances and code letters have no place of their own: needed items always get one, and the spare body armor and guns that don't fit are left out of the run (listed at the end of the spoiler log). |
@@ -173,7 +173,7 @@ codes, advanced logic, Agent):
 
 ```bash
 python -m randomizer.n64rom --base randomizer/n64/build/ge007-rando-base.z64 --out rando.z64 --spoiler spoiler.txt
-python -m randomizer.n64rom --base ... --out rando.z64 --race 15-e978-A3-4FNP1QRP
+python -m randomizer.n64rom --base ... --out rando.z64 --race 16-e978-A3-4FNP1QRP
 ```
 
 `python -m randomizer.n64.validate --base ... --emulator <mupen64plus folder>`
@@ -182,7 +182,7 @@ boots every level of a few seeds in Mupen64Plus and checks each one runs.
 ## Racing
 
 1. One player sets up a seed and presses **Copy race code**. A code looks like
-   `15-e978-A3-4FNP1QRP` and holds the randomizer version, the world-data
+   `16-e978-A3-4FNP1QRP` and holds the randomizer version, the world-data
    fingerprint, all the settings and the seed.
 2. The other players paste it under **Race** and press **Load race seed**.
 3. Before you start, everyone compares the four **check words** (for
@@ -214,11 +214,19 @@ and `data/` on its own. Seeds can also be made without the GUI:
 
 ```sh
 python -m randomizer.generate --difficulty secret --logic normal --containers --goal codes
-python -m randomizer.generate --race 15-e978-A3-4FNP1QRP
+python -m randomizer.generate --race 16-e978-A3-4FNP1QRP
 ```
 
 Seed files land in `data/rando/` (`seed.bin` for the game,
 `spoiler-<code>.txt`, and a per-seed save and log).
+
+**Updates.** From r6 on, the launcher checks GitHub for a newer release when
+it starts. If there is one, the bottom-right corner turns red: *New update
+available*. Clicking *Get rN* downloads it, checks its checksum, unpacks it
+into a new folder next to the current one and copies your ROM, game settings
+and seeds into it, then offers to open it. The old folder stays as it was.
+*Check for updates* asks again at any time. Copies older than r6 don't have
+this: download the new release by hand once.
 
 ## Building a Windows release
 
@@ -227,12 +235,21 @@ In the MSYS2 MINGW64 shell, from the repo root (needs Python with
 
 ```sh
 ./build-pc.sh ntsc-final
-tools_pc/bundle-win.sh rando-r1
-python -m randomizer.package --platform win64 --version r1
+tools_pc/bundle-win.sh rando-r6
+python -m randomizer.package --platform win64
 ```
 
-The output is `dist/GoldenEye-Randomizer-r1-win64.zip`. If only the
-randomizer's Python changed, the last command alone is enough.
+The release name comes from `randomizer/version.py` (`RELEASE = "r6"` here),
+and the output is `dist/GoldenEye-Randomizer-r6-win64.zip`. If only the
+randomizer's Python changed, the last command alone is enough. With
+`pip install certifi` the launcher bundles it as the update check's fallback
+for machines whose certificate store Python can't use.
+
+To publish, upload the zip and its `.sha256` to the GitHub release whose tag
+is that `RELEASE`; the Linux tar.gz of the same commit goes on the same
+release. The launcher's update check takes the highest `rN` release that has
+a package for its platform and refuses a download that doesn't match the
+`.sha256`. Bump `version.py` (r6 -> r7) when starting the next release.
 
 ## Building a Linux release
 
@@ -260,11 +277,12 @@ python3 -m PyInstaller --onefile --noconfirm --clean --name ge007-convert \
 
 # 4. The game, its bundle, and the randomizer package
 ./build-pc.sh ntsc-final
-tools_pc/bundle-linux.sh rando-r1
-python3 -m randomizer.package --platform linux --version r1
+tools_pc/bundle-linux.sh rando-r6
+python3 -m randomizer.package --platform linux
 ```
 
-The output is `dist/GoldenEye-Randomizer-r1-linux.tar.gz`. Players extract
+The output is `dist/GoldenEye-Randomizer-r6-linux.tar.gz` (the name from
+`randomizer/version.py`). Players extract
 it, put their ROM in `data/` as `ge007.ntsc-final.z64`, and run
 `./GoldenEye\ Randomizer`. SDL2 is bundled. zlib and OpenGL come from the
 system, which every desktop distro and SteamOS already has. A build made on
