@@ -33,8 +33,9 @@ AGENT = "goldeneye-randomizer-launcher"
 
 
 def release_number(tag):
-    m = re.fullmatch(r"r(\d+)", (tag or "").strip().lower())
-    return int(m.group(1)) if m else -1
+    """"r6" -> (6, 0), "r6.1" -> (6, 1); None for anything else."""
+    m = re.fullmatch(r"r(\d+)(?:\.(\d+))?", (tag or "").strip().lower())
+    return (int(m.group(1)), int(m.group(2) or 0)) if m else None
 
 
 CURRENT = release_number(RELEASE)
@@ -47,7 +48,7 @@ def package_suffix():
 @dataclass
 class Release:
     tag: str
-    number: int
+    number: tuple     # (major, minor)
     asset: str        # file name
     url: str          # its download URL
     size: int
@@ -158,7 +159,7 @@ def latest(timeout=8):
         num = release_number(rel.get("tag_name"))
         assets = {a["name"]: a for a in rel.get("assets", [])}
         pkg = next((a for name, a in assets.items() if name.endswith(package_suffix())), None)
-        if num < 0 or pkg is None or (best and best.number >= num):
+        if num is None or pkg is None or (best and best.number >= num):
             continue
         sha = assets.get(pkg["name"] + ".sha256")
         best = Release(rel["tag_name"], num, pkg["name"], pkg["browser_download_url"], pkg.get("size", 0),

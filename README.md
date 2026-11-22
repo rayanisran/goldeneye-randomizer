@@ -6,10 +6,12 @@ A randomizer for *GoldenEye 007* (N64), running on the native
 emulator). Every seed shuffles the campaign's keys, keycards, gadgets,
 objective items, body armor and guns between levels, and hides a clearance
 for each level, so any check can open new levels. The goal is to find the
-five letters of the code word **JANUS** and the GoldenEye Key, which open
-Cradle. Every seed is checked by the generator before you play it so it can
+five code letter keycards of the code word **JANUS**, which open Cradle.
+Every seed is checked by the generator before you play it so it can
 always be beaten. Seeds can be shared as short race codes, so two players
 can race the same game.
+
+What's new in each release: [CHANGELOG.md](CHANGELOG.md).
 
 > **PC only for now.** A real N64 ROM (or a `.bps` patch for your own ROM, for
 > emulators and flashcarts) is **planned but not built yet**. The game-side
@@ -258,7 +260,8 @@ To publish, upload the zip and its `.sha256` to the GitHub release whose tag
 is that `RELEASE`; the Linux tar.gz of the same commit goes on the same
 release. The launcher's update check takes the highest `rN` release that has
 a package for its platform and refuses a download that doesn't match the
-`.sha256`. Bump `version.py` (r6 -> r7) when starting the next release.
+`.sha256`. Bump `version.py` when starting the next release (r6 -> r7, or r6 -> r6.1 for a hotfix that
+changes no race code or save) and add the release to `CHANGELOG.md`.
 
 ## Building a Linux release
 
