@@ -12,7 +12,7 @@ Downloads are on the [releases page](https://github.com/rayanisran/goldeneye-ran
 - **r6.1, r6.2, …** Hotfixes. They keep every race code and save working, so
   r6.1 can race r6.
 
-## r6.1 (not released yet)
+## [r6.1](https://github.com/rayanisran/goldeneye-randomizer/releases/tag/r6.1) (2026-11-22, Windows and Linux)
 
 Race codes and saves are the same as r6: r6.1 races r6.
 

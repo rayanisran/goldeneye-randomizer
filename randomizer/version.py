@@ -12,4 +12,4 @@ from the same commit go on the same release (tag = RELEASE). Add the release
 to CHANGELOG.md at the same time.
 """
 
-RELEASE = "r6"
+RELEASE = "r6.1"
